@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
-import { 
-  Activity, ShieldCheck, ShieldAlert, Wifi, Globe, Database, FileText, 
-  AlertTriangle, Download, Printer, CheckCircle2, XCircle, Clock, 
+import {
+  Activity, ShieldCheck, ShieldAlert, Wifi, Globe, Database, FileText,
+  AlertTriangle, Download, Printer, CheckCircle2, XCircle, Clock,
   Layers, Search, AlertCircle, Image, Link, Sparkles
 } from 'lucide-react';
 import SeoDashboard from './SeoDashboard';
@@ -11,10 +11,11 @@ import AccessibilityAudit from './AccessibilityAudit';
 
 export default function UptimeDashboard({ stats, isSocketConnected, onNavigateToAlt }) {
   const [activeSubTab, setActiveSubTab] = useState('performance'); // performance, seo, ui_ux, security, history
-  
+
   if (!stats) return null;
 
-  const { uptimePercentage, latestStatus, historyLog = [], activeAlerts = [] } = stats;
+  const { uptimePercentage, latestStatus, historyLog, activeAlerts = [] } = stats;
+  const safeHistoryLog = Array.isArray(historyLog) ? historyLog : [];
   const isUp = latestStatus ? latestStatus.isUp : false;
   const ssl = latestStatus ? latestStatus.ssl : {};
 
@@ -36,14 +37,14 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
   const security = latestStatus?.security || { securityScore: 100, headers: { missing: [] } };
 
   // Calculate chronological trend data for Recharts
-  const trendData = [...historyLog]
+  const trendData = [...safeHistoryLog]
     .reverse()
     .map(item => {
       const overall = Math.round(
-        ((item.performance?.performanceScore || 90) + 
-         (item.seo?.seoScore || 85) + 
-         (item.security?.securityScore || 90) + 
-         (item.uiUx?.uiHealthScore || 85)) / 4
+        ((item.performance?.performanceScore || 90) +
+          (item.seo?.seoScore || 85) +
+          (item.security?.securityScore || 90) +
+          (item.uiUx?.uiHealthScore || 85)) / 4
       );
       return {
         time: new Date(item.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -59,13 +60,13 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
   // Export scan logs to CSV spreadsheet
   const downloadCsv = () => {
     const headers = ["Timestamp", "Host URL", "Reachable", "HTTP Status", "Load Time (s)", "DNS Speed (ms)", "SSL (Days Remaining)", "Performance Score", "SEO Score", "Security Score", "Accessibility Score", "Overall SRE"];
-    const rows = historyLog.map(h => {
+    const rows = safeHistoryLog.map(h => {
       const perfVal = h.performance?.performanceScore || 90;
       const seoVal = h.seo?.seoScore || 85;
       const secVal = h.security?.securityScore || 90;
       const uiVal = h.uiUx?.uiHealthScore || 85;
       const overall = Math.round((perfVal + seoVal + secVal + uiVal) / 4);
-      
+
       return [
         new Date(h.checkedAt).toISOString(),
         `"${h.url}"`,
@@ -87,7 +88,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `monitorpro_node_history_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `monitorpro_node_history_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -96,7 +97,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
   // High-fidelity custom PDF report print template
   const printPdf = (h) => {
     const w = window.open('', '_blank');
-    
+
     const isUpLabel = h.isUp ? 'OPERATIONAL' : 'DOWN / OFFLINE';
     const isUpColor = h.isUp ? '#10b981' : '#ef4444';
     const perfVal = h.performance?.performanceScore || 90;
@@ -256,7 +257,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
               <div class="meta-item"><strong>Target URL:</strong> ${h.url}</div>
               <div class="meta-item"><strong>Scan Date:</strong> ${new Date(h.checkedAt).toLocaleString()}</div>
               <div class="meta-item"><strong>Report Reference ID:</strong> MP-NODE-${h._id}</div>
-              <div class="meta-item"><strong>Server Status:</strong> HTTP ${h.statusCode || 200} (Load Time: ${h.isUp ? `${(h.loadTimeMs/1000).toFixed(2)}s` : '—'})</div>
+              <div class="meta-item"><strong>Server Status:</strong> HTTP ${h.statusCode || 200} (Load Time: ${h.isUp ? `${(h.loadTimeMs / 1000).toFixed(2)}s` : '—'})</div>
           </div>
  
           <div class="score-container">
@@ -333,10 +334,10 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
 
   return (
     <div className="space-y-6">
-      
+
       {/* 1. Real-time Uptime Indicators */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-fade-in-up">
-        
+
         {/* Status Indicator */}
         <div className="glass-card p-6 flex flex-col justify-between">
           <div className="flex justify-between items-center">
@@ -429,7 +430,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
           {/* Circular Score */}
           <div className="lg:col-span-3 bg-dark-900/20 border border-slate-800/60 p-5 rounded-2xl flex flex-col items-center justify-center text-center">
             <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider mb-3 w-full text-left">Audit Score</span>
-            
+
             <div className="relative w-28 h-28 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90">
                 <circle cx="56" cy="56" r="48" fill="transparent" stroke="rgba(255,255,255,0.03)" strokeWidth="6"></circle>
@@ -455,7 +456,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
 
           {/* Audit Details */}
           <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-4">
-            
+
             {/* Meta Title Auditor */}
             <div className="p-4 bg-dark-900/10 border border-slate-800/40 rounded-xl flex flex-col justify-between hover:border-slate-800/40 transition-all">
               <div>
@@ -521,11 +522,11 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                     </span>
                     <span className="text-[10px] font-mono font-bold text-slate-400">{valid}/{total} Images</span>
                   </div>
-                  
+
                   <div className="w-full bg-slate-950/60 rounded-full h-1.5 overflow-hidden border border-slate-850/80 mb-2.5">
                     <div className={`h-full rounded-full transition-all duration-500 ${pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${pct}%` }}></div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center text-[10px]">
                     <span className="text-slate-500">Compliance Rate: {pct}%</span>
                     {missing > 0 ? (
@@ -609,11 +610,10 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
           <button
             key={sub.id}
             onClick={() => setActiveSubTab(sub.id)}
-            className={`pb-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-              activeSubTab === sub.id
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+            className={`pb-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer ${activeSubTab === sub.id
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
           >
             {sub.label}
           </button>
@@ -622,7 +622,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
 
       {/* 3. Sub-tab panel renders */}
       <div className="animate-fade mt-4">
-        
+
         {/* Core Web Vitals Tab */}
         {activeSubTab === 'performance' && (
           <div className="space-y-6">
@@ -646,24 +646,36 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
               {/* Vitals Grid cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {[
-                  { name: 'First Contentful Paint', key: 'fcp', unit: 's', desc: 'Measures when first content renders.', target: 'Ideal: < 1.8s',
+                  {
+                    name: 'First Contentful Paint', key: 'fcp', unit: 's', desc: 'Measures when first content renders.', target: 'Ideal: < 1.8s',
                     getReason: (v) => v > 3 ? 'Render-blocking scripts or stylesheets delaying initial paint.' : v > 1.8 ? 'Slow server response or large CSS bundle affecting paint start.' : 'FCP is within acceptable range.',
-                    getSuggestion: (v) => v > 1.8 ? 'Eliminate render-blocking resources. Inline critical CSS and defer non-critical JS.' : 'No action needed.' },
-                  { name: 'Largest Contentful Paint', key: 'lcp', unit: 's', desc: 'Measures main page content load.', target: 'Ideal: < 2.5s',
+                    getSuggestion: (v) => v > 1.8 ? 'Eliminate render-blocking resources. Inline critical CSS and defer non-critical JS.' : 'No action needed.'
+                  },
+                  {
+                    name: 'Largest Contentful Paint', key: 'lcp', unit: 's', desc: 'Measures main page content load.', target: 'Ideal: < 2.5s',
                     getReason: (v) => v > 4 ? 'Large hero image or video causing slow loading.' : v > 2.5 ? 'Slow server response time or large resource blocking main content.' : 'LCP is within acceptable range.',
-                    getSuggestion: (v) => v > 2.5 ? 'Compress images, use modern formats (WebP/AVIF), apply lazy loading, and use a CDN.' : 'No action needed.' },
-                  { name: 'Cumulative Layout Shift', key: 'cls', unit: '', desc: 'Measures visual content stability.', target: 'Ideal: < 0.10',
+                    getSuggestion: (v) => v > 2.5 ? 'Compress images, use modern formats (WebP/AVIF), apply lazy loading, and use a CDN.' : 'No action needed.'
+                  },
+                  {
+                    name: 'Cumulative Layout Shift', key: 'cls', unit: '', desc: 'Measures visual content stability.', target: 'Ideal: < 0.10',
                     getReason: (v) => v > 0.25 ? 'Images or ads without explicit dimensions causing layout shifts.' : v > 0.1 ? 'Dynamic content or web fonts causing elements to shift during load.' : 'CLS is within acceptable range.',
-                    getSuggestion: (v) => v > 0.1 ? 'Always set width/height on images and video. Avoid inserting content above existing content.' : 'No action needed.' },
-                  { name: 'First Input Delay', key: 'fid', unit: 'ms', desc: 'Measures initial button responsiveness.', target: 'Ideal: < 100ms',
+                    getSuggestion: (v) => v > 0.1 ? 'Always set width/height on images and video. Avoid inserting content above existing content.' : 'No action needed.'
+                  },
+                  {
+                    name: 'First Input Delay', key: 'fid', unit: 'ms', desc: 'Measures initial button responsiveness.', target: 'Ideal: < 100ms',
                     getReason: (v) => v > 300 ? 'Heavy JavaScript execution blocking the main thread.' : v > 100 ? 'Long tasks on the main thread delaying user interaction response.' : 'FID is within acceptable range.',
-                    getSuggestion: (v) => v > 100 ? 'Break up long JavaScript tasks. Use web workers for heavy computations. Defer unused JS.' : 'No action needed.' },
-                  { name: 'Interaction to Next Paint', key: 'inp', unit: 'ms', desc: 'Measures visual feedback latency.', target: 'Ideal: < 200ms',
+                    getSuggestion: (v) => v > 100 ? 'Break up long JavaScript tasks. Use web workers for heavy computations. Defer unused JS.' : 'No action needed.'
+                  },
+                  {
+                    name: 'Interaction to Next Paint', key: 'inp', unit: 'ms', desc: 'Measures visual feedback latency.', target: 'Ideal: < 200ms',
                     getReason: (v) => v > 500 ? 'Slow event callbacks or expensive DOM updates on user interaction.' : v > 200 ? 'Heavy re-renders or synchronous operations blocking interaction response.' : 'INP is within acceptable range.',
-                    getSuggestion: (v) => v > 200 ? 'Optimize event handlers. Minimise synchronous DOM operations. Use requestAnimationFrame for visual updates.' : 'No action needed.' },
-                  { name: 'Speed Index', key: 'speedIndex', unit: 's', desc: 'Measures visual progression speed.', target: 'Ideal: < 3.4s',
+                    getSuggestion: (v) => v > 200 ? 'Optimize event handlers. Minimise synchronous DOM operations. Use requestAnimationFrame for visual updates.' : 'No action needed.'
+                  },
+                  {
+                    name: 'Speed Index', key: 'speedIndex', unit: 's', desc: 'Measures visual progression speed.', target: 'Ideal: < 3.4s',
                     getReason: (v) => v > 5 ? 'Many render-blocking resources slowing visual population of the page.' : v > 3.4 ? 'Slow resource loading order affecting how quickly content becomes visible.' : 'Speed Index is within acceptable range.',
-                    getSuggestion: (v) => v > 3.4 ? 'Prioritise above-the-fold content loading. Reduce unused CSS/JS. Enable server-side compression.' : 'No action needed.' },
+                    getSuggestion: (v) => v > 3.4 ? 'Prioritise above-the-fold content loading. Reduce unused CSS/JS. Enable server-side compression.' : 'No action needed.'
+                  },
                 ].map(v => {
                   const val = perf?.vitals?.[v.key] || 0;
                   let color = 'text-emerald-400';
@@ -673,7 +685,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                   } else if (v.key === 'cls' ? val > 0.1 : v.key === 'lcp' ? val > 2.5 : val > 100) {
                     color = 'text-amber-400'; status = 'needs-improvement';
                   }
-                  const reason     = v.getReason(val);
+                  const reason = v.getReason(val);
                   const suggestion = v.getSuggestion(val);
 
                   return (
@@ -744,7 +756,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
         {/* Scan History and Recharts Trends Tab */}
         {activeSubTab === 'history' && (
           <div className="space-y-6">
-            
+
             {/* Top Recharts chronological trends */}
             <div className="glass-card p-6">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-6">
@@ -755,9 +767,9 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">Dual-axis telemetry tracking overall score variations vs site load latency speeds.</p>
                 </div>
-                
+
                 {/* Download CSV button */}
-                <button 
+                <button
                   onClick={downloadCsv}
                   className="px-4 py-2 bg-indigo-600 border-none hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/15 cursor-pointer"
                 >
@@ -803,7 +815,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                 <span>Auditing History Logs</span>
                 <span className="text-xs text-slate-500 font-bold bg-slate-800/60 px-2.5 py-0.5 rounded-full">{historyLog.length} scan records</span>
               </h3>
-              
+
               <div className="overflow-x-auto max-h-80 overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
@@ -820,14 +832,14 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                     </tr>
                   </thead>
                   <tbody>
-                    {historyLog.map((log) => {
+                    {safeHistoryLog.map((log) => {
                       const overall = Math.round(
-                        ((log.performance?.performanceScore || 90) + 
-                         (log.seo?.seoScore || 85) + 
-                         (log.security?.securityScore || 90) + 
-                         (log.uiUx?.uiHealthScore || 85)) / 4
+                        ((log.performance?.performanceScore || 90) +
+                          (log.seo?.seoScore || 85) +
+                          (log.security?.securityScore || 90) +
+                          (log.uiUx?.uiHealthScore || 85)) / 4
                       );
-                      
+
                       return (
                         <tr key={log._id} className="border-b border-slate-800/40 hover:bg-dark-900/20 transition-colors">
                           <td className="py-3 px-3 text-slate-500 font-mono">
@@ -849,7 +861,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <button 
+                            <button
                               onClick={() => printPdf(log)}
                               className="p-1.5 bg-dark-900/60 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 border border-slate-800 transition-all cursor-pointer"
                               title="Print high-fidelity PDF report"
