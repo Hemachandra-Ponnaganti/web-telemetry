@@ -1,0 +1,9 @@
+{
+  "buildCommand": "CI=false npm run build",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://monitoring-main-main1.onrender.com/api/:path*"
+    }
+  ]
+}

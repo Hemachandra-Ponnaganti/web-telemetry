@@ -1,0 +1,26 @@
+services:
+  # Node.js Express Backend Service
+  - type: web
+    name: website-monitor-backend
+    env: node
+    rootDir: node-website-monitor/backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+  # Vite React Frontend Static Site
+  - type: static
+    name: website-monitor-frontend
+    rootDir: node-website-monitor/frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: website-monitor-backend
+          property: url

@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MonitorPro SRE – Real-Time Website Monitoring, SEO & Security Console</title>
+  <meta name="description" content="MonitorPro SRE is an advanced, real-time website monitoring and site reliability engineering dashboard. Audit page speed, SEO indexability, SSL trust-chains, layout shifts (CLS), and security vulnerabilities instantly.">
+  <style>
+    :root {
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --info: #60a5fa;
+      --card: #efefef;
+      --border: #1353ad;
+      --muted: #084294;
+      --bg: #f7f5ed;
+      --surface: #162032;
+      --text: #020811;
+      --text-dim: #01050b;
+      --accent: #6366f1;
+      --accent-hover: #040d5c;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    nav {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    nav a:hover,
+    nav a.active {
+      color: var(--text);
+      background: var(--card);
+    }
+
+    /* ── MAIN ── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .tab-btn {
+      padding: 0.6rem 1.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ── INPUT ROW ── */
+    .input-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+
+    .input-row input[type="text"],
+    .input-row input[type="url"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-row input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.65rem 1.5rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-secondary {
+      background: rgba(15, 23, 42, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      border-radius: 10px;
+      padding: 0.65rem 1.2rem;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(99, 102, 241, 0.12);
+      color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ── SPINNER ── */
+    #spinner {
+      display: none;
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+
+    .spinner-ring {
+      width: 56px;
+      height: 56px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #spinner-msg {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── SCORE RINGS ── */
+    .scores-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .score-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      min-height: 220px;
+    }
+
+    .score-card .label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-align: center;
+      max-width: 100%;
+    }
+
+    .ring-wrap {
+      position: relative;
+      width: 110px;
+      height: 110px;
+    }
+
+    .ring-wrap svg {
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 8;
+    }
+
+    .ring-fg {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s ease;
+    }
+
+    .ring-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.15rem;
+    }
+
+    .ring-text .num {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .ring-text .sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* ── STAT CARDS ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.25rem;
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-card .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .stat-card .stat-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-good {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--good);
+    }
+
+    .badge-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warn);
+    }
+
+    .badge-bad {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--bad);
+    }
+
+    .badge-info {
+      background: rgba(96, 165, 250, 0.15);
+      color: var(--info);
+    }
+
+    .badge-muted {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--muted);
+    }
+
+    /* ── ERROR CARD ── */
+    .error-bar {
+      height: 6px;
+      border-radius: 3px;
+      margin-bottom: 1rem;
+    }
+
+    .error-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .error-item .ei-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .error-item .ei-value {
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-top: 0.15rem;
+    }
+
+    /* ── ALERTS ── */
+    .alert-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 10px;
+      margin-bottom: 0.5rem;
+      border: 1px solid transparent;
+    }
+
+    .alert-critical {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.2);
+    }
+
+    .alert-ok {
+      background: rgba(34, 197, 94, 0.08);
+      border-color: rgba(34, 197, 94, 0.2);
+    }
+
+    .alert-info {
+      background: rgba(96, 165, 250, 0.08);
+      border-color: rgba(96, 165, 250, 0.2);
+    }
+
+    .alert-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+
+    .dot-critical {
+      background: var(--bad);
+    }
+
+    .dot-warning {
+      background: var(--warn);
+    }
+
+    .dot-ok {
+      background: var(--good);
+    }
+
+    .dot-info {
+      background: var(--info);
+    }
+
+    .alert-text .at-level {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .alert-text .at-msg {
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    /* ── PERF DETAILS ── */
+    .perf-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .perf-item {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+
+    .perf-item .pi-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .perf-item .pi-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-top: 0.2rem;
+    }
+
+    .resource-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    /* ── SEO ── */
+    .seo-section {
+      margin-bottom: 1.25rem;
+    }
+
+    .seo-section-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.6rem;
+    }
+
+    .seo-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    }
+
+    .seo-row:last-child {
+      border-bottom: none;
+    }
+
+    .seo-key {
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+
+    .seo-val {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .heading-chips {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .h-chip {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* ── SECURITY HEADERS TABLE ── */
+    .sec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .sec-table th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sec-table td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+    }
+
+    .sec-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .progress-bar-wrap {
+      background: var(--bg);
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 1s ease;
+    }
+
+    /* ── CHARTS ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .chart-wrap {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    .chart-wrap canvas {
+      max-height: 220px;
+    }
+
+    /* ── META INFO ── */
+    .meta-info {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+      padding: 0.75rem 1rem;
+      background: var(--card);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .meta-info span {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    /* ── IMAGE ANALYZER ── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--card);
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .drop-zone .dz-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .drop-zone p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .drop-zone strong {
+      color: var(--text);
+    }
+
+    #img-file-input {
+      display: none;
+    }
+
+    .img-result-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .img-preview {
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    /* ── REDIRECT CHAIN ── */
+    .redirect-chain {
+      margin-top: 0.75rem;
+    }
+
+    .redirect-step {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.25rem 0;
+    }
+
+    .redirect-step .rs-code {
+      font-weight: 600;
+      color: var(--warn);
+    }
+
+    .redirect-arrow {
+      color: var(--border);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+
+      .scores-grid,
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .perf-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+
+      .scores-grid,
+      .stats-grid,
+      .perf-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .error-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .img-result-grid {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        padding: 1rem 1rem 3rem;
+      }
+
+      header {
+        padding: 0 1rem;
+      }
+    }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.5rem 0 1.25rem;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--muted);
+    }
+
+    .empty-state .es-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .empty-state p {
+      font-size: 0.95rem;
+    }
+
+    /* ── COLLAPSIBLE ── */
+    .collapsible-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .collapsible-header .chevron {
+      transition: transform 0.2s;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .collapsible-header.open .chevron {
+      transform: rotate(180deg);
+    }
+
+    .collapsible-body {
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="logo">⬡ WebMonitor</div>
+    <nav>
+      <a href="/" class="active">Dashboard</a>
+      <a href="/history/">History</a>
+    </nav>
+  </header>
+  <main>
+    <!-- ══════════════════════════════════════════
+       WEBSITE ANALYZER DASHBOARD
+  ══════════════════════════════════════════ -->
+    <div id="tab-website" class="tab-panel active">
+      <div class="input-row">
+        <input type="url" id="url-input" placeholder="https://example.com" autocomplete="off">
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+          <button class="btn-primary" id="analyze-btn" onclick="runAnalysis()">Analyze</button>
+          <button class="btn-secondary" id="quick-analyze-btn" onclick="runQuickAnalysis()">Quick Scan</button>
+        </div>
+      </div>
+
+      <!-- SPINNER -->
+      <div id="spinner">
+        <div class="spinner-ring"></div>
+        <div id="spinner-msg">Initializing analysis…</div>
+      </div>
+
+      <!-- RESULTS -->
+      <div id="results" style="display:none">
+        <!-- Meta info -->
+        <div class="meta-info" id="meta-info"></div>
+        <div class="stats-grid" id="dashboard-summary" style="margin-bottom:1.25rem;display:none"></div>
+
+        <!-- 1. SCORES ROW -->
+        <div class="scores-grid" id="scores-grid"></div>
+
+        <!-- 2. WEBSITE STATUS -->
+        <div class="stats-grid" id="stats-grid"></div>
+
+        <!-- 3. ERROR DETECTION -->
+        <div class="card" id="error-card"></div>
+
+        <!-- 4. ALERTS -->
+        <div class="card" id="alerts-card"></div>
+
+        <!-- 5. PERFORMANCE -->
+        <div class="card" id="perf-card"></div>
+
+        <!-- 6. SEO -->
+        <div class="card" id="seo-card"></div>
+
+        <!-- 7. SECURITY -->
+        <div class="card" id="sec-card"></div>
+
+        <!-- 8. IMAGE ANALYSIS -->
+        <div class="card" id="image-card"></div>
+
+        <!-- 9. HISTORY CHARTS -->
+        <div class="card" id="charts-card" style="display:none">
+          <div class="card-title">📊 History Trends</div>
+          <div class="charts-grid">
+            <div class="chart-wrap">
+              <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">Load Time (ms) – Last 10 Analyses
+              </div>
+              <canvas id="chart-loadtime"></canvas>
+            </div>
+            <div class="chart-wrap">
+              <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">Scores – Last 10 Analyses</div>
+              <canvas id="chart-scores"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+  </main>
+  <script>
+    // ── UTILITIES ──────────────────────────────────────────────
+    function scoreColor(s) {
+      if (s === null || s === undefined) return 'var(--muted)';
+      if (s >= 75) return 'var(--good)';
+      if (s >= 50) return 'var(--warn)';
+      return 'var(--bad)';
+    }
+    function scoreBadgeClass(s) {
+      if (s === null || s === undefined) return 'badge-muted';
+      if (s >= 75) return 'badge-good';
+      if (s >= 50) return 'badge-warn';
+      return 'badge-bad';
+    }
+    function statusBadge(ok, trueLabel, falseLabel) {
+      return ok
+        ? `<span class="badge badge-good">✓ ${trueLabel}</span>`
+        : `<span class="badge badge-bad">✗ ${falseLabel}</span>`;
+    }
+    function seoStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'good' || s === 'ok' || s === 'found' || s === 'present') return `<span class="badge badge-good">${status}</span>`;
+      if (s === 'warning' || s === 'warn' || s === 'missing' || s === 'not found') return `<span class="badge badge-warn">${status}</span>`;
+      if (s === 'error' || s === 'bad' || s === 'broken') return `<span class="badge badge-bad">${status}</span>`;
+      return `<span class="badge badge-muted">${status || '—'}</span>`;
+    }
+    function alertDotClass(level) {
+      const l = (level || '').toLowerCase();
+      if (l === 'critical') return 'dot-critical';
+      if (l === 'warning' || l === 'warn') return 'dot-warning';
+      if (l === 'ok') return 'dot-ok';
+      return 'dot-info';
+    }
+    function alertItemClass(level) {
+      const l = (level || '').toLowerCase();
+      if (l === 'critical') return 'alert-critical';
+      if (l === 'warning' || l === 'warn') return 'alert-warning';
+      if (l === 'ok') return 'alert-ok';
+      return 'alert-info';
+    }
+    function alertTextColor(level) {
+      const l = (level || '').toLowerCase();
+      if (l === 'critical') return 'var(--bad)';
+      if (l === 'warning' || l === 'warn') return 'var(--warn)';
+      if (l === 'ok') return 'var(--good)';
+      return 'var(--info)';
+    }
+    function esc(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function fmtTime(ms) {
+      if (ms === null || ms === undefined) return '—';
+      const value = Number(ms);
+      if (Number.isNaN(value)) return String(ms);
+      if (value >= 1) return value.toFixed(2) + 's';
+      return Math.round(value * 1000) + 'ms';
+    }
+    function fmtDate(str) {
+      if (!str) return '—';
+      try { return new Date(str).toLocaleString(); } catch (e) { return str; }
+    }
+
+    // ── SCORE RING ──────────────────────────────────────────────
+    function buildRing(score, label, isLarge) {
+      const r = isLarge ? 40 : 36;
+      const cx = isLarge ? 50 : 45;
+      const circ = 2 * Math.PI * r;
+      const pct = typeof score === 'number' ? Math.max(0, Math.min(100, score)) : 0;
+      const offset = circ - (pct / 100) * circ;
+      const color = scoreColor(score);
+      const size = isLarge ? 100 : 90;
+      const id = 'ring_' + Math.random().toString(36).slice(2);
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.style.strokeDashoffset = offset;
+      }, 50);
+      return `
+    <div class="ring-wrap" style="width:${size}px;height:${size}px">
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <circle class="ring-bg" cx="${cx}" cy="${cx}" r="${r}"/>
+        <circle class="ring-fg" id="${id}" cx="${cx}" cy="${cx}" r="${r}"
+          stroke="${color}"
+          stroke-dasharray="${circ}"
+          stroke-dashoffset="${circ}"
+          style="stroke-dashoffset:${circ}"/>
+      </svg>
+      <div class="ring-text">
+        <span class="num" style="color:${color}">${score !== null && score !== undefined ? Math.round(score) : '—'}</span>
+        <span class="sub">/100</span>
+      </div>
+    </div>
+    <div class="label">${esc(label)}</div>`;
+    }
+
+    // ── TAB SWITCH ──────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    // ── SPINNER MESSAGES ────────────────────────────────────────
+    const spinnerMsgs = [
+      'Connecting to website…',
+      'Checking HTTP status & performance…',
+      'Running SEO analysis…',
+      'Scanning security headers…',
+      'Detecting errors & alerts…',
+      'Compiling results…'
+    ];
+    let spinnerInterval = null;
+    function startSpinner() {
+      let i = 0;
+      document.getElementById('spinner-msg').textContent = spinnerMsgs[0];
+      spinnerInterval = setInterval(() => {
+        i = (i + 1) % spinnerMsgs.length;
+        document.getElementById('spinner-msg').textContent = spinnerMsgs[i];
+      }, 1800);
+    }
+    function stopSpinner() {
+      clearInterval(spinnerInterval);
+    }
+
+    // ── MAIN ANALYSIS ───────────────────────────────────────────
+    async function runAnalysis() {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) { alert('Please enter a URL.'); return; }
+
+      document.getElementById('analyze-btn').disabled = true;
+      document.getElementById('quick-analyze-btn').disabled = true;
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('spinner').style.display = 'block';
+      startSpinner();
+
+      try {
+        const resp = await fetch('/api/analyze/?url=' + encodeURIComponent(url));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        stopSpinner();
+        document.getElementById('spinner').style.display = 'none';
+        renderResults(data);
+        document.getElementById('results').style.display = 'block';
+        loadHistoryCharts(url);
+      } catch (err) {
+        stopSpinner();
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('results').innerHTML = `
+      <div class="card" style="border-color:rgba(239,68,68,0.3)">
+        <div style="color:var(--bad);font-weight:600;margin-bottom:0.5rem">⚠ Analysis Failed</div>
+        <div style="color:var(--muted);font-size:0.9rem">${esc(err.message)}</div>
+      </div>`;
+        document.getElementById('results').style.display = 'block';
+      } finally {
+        document.getElementById('analyze-btn').disabled = false;
+        document.getElementById('quick-analyze-btn').disabled = false;
+      }
+    }
+
+    async function runQuickAnalysis() {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) { alert('Please enter a URL.'); return; }
+
+      document.getElementById('analyze-btn').disabled = true;
+      document.getElementById('quick-analyze-btn').disabled = true;
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('spinner').style.display = 'block';
+      startSpinner();
+
+      try {
+        const resp = await fetch('/api/quick-analyze/?url=' + encodeURIComponent(url));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        stopSpinner();
+        document.getElementById('spinner').style.display = 'none';
+        renderQuickResults(data);
+        document.getElementById('results').style.display = 'block';
+      } catch (err) {
+        stopSpinner();
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('results').innerHTML = `
+      <div class="card" style="border-color:rgba(239,68,68,0.3)">
+        <div style="color:var(--bad);font-weight:600;margin-bottom:0.5rem">⚠ Quick Scan Failed</div>
+        <div style="color:var(--muted);font-size:0.9rem">${esc(err.message)}</div>
+      </div>`;
+        document.getElementById('results').style.display = 'block';
+      } finally {
+        document.getElementById('analyze-btn').disabled = false;
+        document.getElementById('quick-analyze-btn').disabled = false;
+      }
+    }
+
+    function renderQuickResults(data) {
+      const { url, quick_score, check, seo, errors } = data;
+      document.getElementById('meta-info').innerHTML = `
+    <span>🔗 <strong>${esc(url)}</strong></span>
+    <span>⚡ Quick Score: <strong>${quick_score !== null ? esc(quick_score) : 'N/A'}</strong></span>
+    <span>⏱ Status: <strong>${check.is_up ? 'Online' : 'Offline'}</strong></span>`;
+
+      const statusHtml = `
+      <div class="stat-card" style="grid-template-columns:1fr;">
+        <div><strong>URL Status</strong></div>
+        <div>${statusBadge(check.is_up, 'Online', 'Offline')} ${esc(check.status_code)}</div>
+        <div>Load Time: <strong>${fmtTime(check.load_time)}</strong></div>
+      </div>`;
+      document.getElementById('stats-grid').innerHTML = statusHtml;
+      document.getElementById('scores-grid').innerHTML = `
+        <div class="card"><div class="card-title">Quick SEO</div>${seoStatusBadge((seo.title && (seo.title.status || seo.title.text)) || 'Unknown')}</div>
+      `;
+      document.getElementById('error-card').innerHTML = `
+        <div class="card-title">Error Scan</div>
+        <p style="margin:0.5rem 0;">${errors.alerts && errors.alerts.length ? esc(errors.alerts[0].message) : 'No immediate issues detected.'}</p>
+      `;
+      document.getElementById('alerts-card').innerHTML = '';
+      document.getElementById('perf-card').innerHTML = '';
+      document.getElementById('seo-card').innerHTML = '';
+      document.getElementById('sec-card').innerHTML = '';
+      document.getElementById('image-card').innerHTML = '';
+      document.getElementById('charts-card').style.display = 'none';
+      document.getElementById('dashboard-summary').style.display = 'none';
+      document.getElementById('results').style.display = 'block';
+    }
+
+    document.getElementById('url-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') runAnalysis();
+    });
+
+    // ── RENDER ALL RESULTS ──────────────────────────────────────
+    function renderResults(data) {
+      const { url, report_id, overall_score, overall_label, check, errors, seo, performance, security, images, all_alerts } = data;
+
+      // Meta info
+      document.getElementById('meta-info').innerHTML = `
+    <span>🔗 <strong>${esc(url)}</strong></span>
+    <span>🆔 Report ID: <strong>${esc(report_id)}</strong></span>
+    <span>⭐ Quality: <strong>${esc(overall_label || '—')}</strong></span>
+    <span>🕐 Analyzed at: <strong>${new Date().toLocaleString()}</strong></span>`;
+
+      renderSummary(data);
+      // 1. Scores
+      renderScores(overall_score, performance, seo, security);
+
+      // 2. Status
+      renderStatus(check);
+
+      // 3. Error
+      renderError(errors);
+
+      // 4. Alerts
+      renderAlerts(all_alerts);
+
+      // 5. Performance
+      renderPerformance(performance);
+
+      // 6. SEO
+      renderSEO(seo);
+
+      // 7. Security
+      renderSecurity(security);
+
+      // 8. Image Analysis
+      renderImageAnalysis(images);
+    }
+
+    function renderSummary(data) {
+      const url = data.url || '';
+      const reportId = data.report_id || '—';
+      const overallLabel = data.overall_label || 'Pending';
+      const status = data.check?.is_up ? 'Healthy' : 'Unreachable';
+      const statusClass = data.check?.is_up ? 'badge-good' : 'badge-bad';
+      document.getElementById('dashboard-summary').style.display = 'grid';
+      document.getElementById('dashboard-summary').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Saved Report</div>
+        <div class="stat-value">${esc(reportId)}</div>
+        <div class="stat-sub">Persisted in history</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Page Health</div>
+        <div class="stat-value"><span class="badge ${statusClass}">${esc(status)}</span></div>
+        <div class="stat-sub">Checked live now</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overall Label</div>
+        <div class="stat-value">${esc(overallLabel)}</div>
+        <div class="stat-sub">Assessment</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">History Link</div>
+        <div class="stat-value"><a href="/history/" style="color:var(--info);text-decoration:none">Open History</a></div>
+        <div class="stat-sub">Review past reports</div>
+      </div>`;
+    }
+
+    // ── 1. SCORES ───────────────────────────────────────────────
+    function renderScores(overall, perf, seo, sec) {
+      const perfScore = perf ? perf.performance_score : null;
+      const seoScore = seo ? seo.seo_score : null;
+      const secScore = sec ? sec.security_score : null;
+
+      const cards = [
+        { score: overall, label: '🎯 Overall Score', large: true },
+        { score: perfScore, label: '⚡ Performance Score', large: false },
+        { score: seoScore, label: '🔍 SEO Score', large: false },
+        { score: secScore, label: '🔒 Security Score', large: false },
+      ];
+
+      document.getElementById('scores-grid').innerHTML = cards.map(c => `
+    <div class="score-card">
+      ${buildRing(c.score, c.label, c.large)}
+    </div>`).join('');
+    }
+
+    // ── 2. WEBSITE STATUS ───────────────────────────────────────
+    function renderStatus(check) {
+      if (!check) { document.getElementById('stats-grid').innerHTML = ''; return; }
+      const isUp = check.is_up;
+      const items = [
+        {
+          label: 'Status',
+          value: isUp
+            ? `<span style="color:var(--good)">● UP</span>`
+            : `<span style="color:var(--bad)">● DOWN</span>`,
+          sub: isUp ? 'Website is reachable' : 'Website is unreachable'
+        },
+        {
+          label: 'HTTP Code',
+          value: `<span style="color:${check.status_code < 400 ? 'var(--good)' : 'var(--bad)'}">${check.status_code || '—'}</span>`,
+          sub: httpCodeLabel(check.status_code)
+        },
+        {
+          label: 'Load Time',
+          value: fmtTime(check.load_time),
+          sub: check.perf_rating || ''
+        },
+        {
+          label: 'Page Size',
+          value: check.page_size_kb ? check.page_size_kb.toFixed(1) + ' KB' : '—',
+          sub: check.page_size_kb ? (check.page_size_kb / 1024).toFixed(2) + ' MB' : ''
+        }
+      ];
+      document.getElementById('stats-grid').innerHTML = items.map(i => `
+    <div class="stat-card" style="border-color:${isUp ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}">
+      <div class="stat-label">${i.label}</div>
+      <div class="stat-value">${i.value}</div>
+      <div class="stat-sub">${i.sub}</div>
+    </div>`).join('');
+    }
+    function httpCodeLabel(code) {
+      const map = { 200: 'OK', 201: 'Created', 301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable' };
+      return map[code] || '';
+    }
+
+    // ── 3. ERROR DETECTION ──────────────────────────────────────
+    function renderError(errors) {
+      if (!errors) { document.getElementById('error-card').innerHTML = ''; return; }
+      const sev = (errors.severity || '').toLowerCase();
+      const barColor = sev === 'critical' || sev === 'error' ? 'var(--bad)' : sev === 'warning' ? 'var(--warn)' : 'var(--good)';
+      const badgeClass = sev === 'critical' || sev === 'error' ? 'badge-bad' : sev === 'warning' ? 'badge-warn' : 'badge-good';
+
+      let redirectHtml = '';
+      if (errors.redirect_chain && errors.redirect_chain.length > 0) {
+        redirectHtml = `<div class="redirect-chain">
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em">Redirect Chain</div>
+      ${errors.redirect_chain.map((r, i) => `
+        <div class="redirect-step">
+          ${i > 0 ? '<span class="redirect-arrow">↳</span>' : ''}
+          <span class="rs-code">${r.status_code || ''}</span>
+          <span>${esc(r.url || r)}</span>
+        </div>`).join('')}
+    </div>`;
+      }
+
+      document.getElementById('error-card').innerHTML = `
+    <div class="card-title">🚨 Error Detection</div>
+    <div class="error-bar" style="background:${barColor}"></div>
+    <div class="error-grid">
+      <div class="error-item">
+        <div class="ei-label">Status</div>
+        <div class="ei-value"><span class="badge ${badgeClass}">${esc(errors.label || errors.severity || '—')}</span></div>
+      </div>
+      <div class="error-item">
+        <div class="ei-label">Category</div>
+        <div class="ei-value">${esc(errors.category || '—')}</div>
+      </div>
+      <div class="error-item">
+        <div class="ei-label">HTTP Code</div>
+        <div class="ei-value">${errors.status_code || '—'}</div>
+      </div>
+      <div class="error-item">
+        <div class="ei-label">HTTPS</div>
+        <div class="ei-value">${errors.is_https ? '<span class="badge badge-good">🔒 Secure</span>' : '<span class="badge badge-bad">⚠ Not Secure</span>'}</div>
+      </div>
+    </div>
+    ${errors.message ? `<div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:8px;font-size:0.875rem;color:var(--muted)">${esc(errors.message)}</div>` : ''}
+    ${redirectHtml}
+    ${renderAlertsList(errors.alerts, false)}`;
+    }
+
+    // ── 4. ALERTS ───────────────────────────────────────────────
+    function renderAlerts(all_alerts) {
+      const el = document.getElementById('alerts-card');
+      if (!all_alerts || all_alerts.length === 0) {
+        el.innerHTML = `<div class="card-title">🔔 Alerts</div><div style="color:var(--muted);font-size:0.875rem">No alerts found.</div>`;
+        return;
+      }
+      const levels = all_alerts.reduce((acc, alert) => {
+        const level = (alert.level || 'info').toLowerCase();
+        acc[level] = (acc[level] || 0) + 1;
+        return acc;
+      }, {});
+      const summaryBadges = ['critical', 'warning', 'ok', 'info'].map(level => {
+        const count = levels[level] || 0;
+        const classes = level === 'critical' ? 'badge-bad' : level === 'warning' ? 'badge-warn' : level === 'ok' ? 'badge-good' : 'badge-info';
+        return `<span class="badge ${classes}" style="margin-right:0.4rem">${level.toUpperCase()}: ${count}</span>`;
+      }).join('');
+      const grouped = groupAlertsByCategory(all_alerts);
+      const content = Object.entries(grouped).map(([category, alerts]) => `
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.85rem;font-weight:700;margin-bottom:0.5rem;text-transform:uppercase;color:var(--muted)">${esc(category)} (${alerts.length})</div>
+        ${renderAlertsList(alerts, false)}
+      </div>
+    `).join('');
+      el.innerHTML = `<div class="card-title">🔔 Alerts <span class="badge badge-muted" style="margin-left:0.5rem">${all_alerts.length}</span></div><div style="margin-bottom:0.85rem">${summaryBadges}</div>${content}`;
+    }
+    function groupAlertsByCategory(alerts) {
+      return alerts.reduce((acc, alert) => {
+        const key = (alert.category || 'General').toString().replace(/_/g, ' ').toUpperCase();
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(alert);
+        return acc;
+      }, {});
+    }
+    function renderAlertsList(alerts, standalone) {
+      if (!alerts || alerts.length === 0) return '';
+      return alerts.map(a => {
+        const level = a.level || a.type || 'info';
+        return `<div class="alert-item ${alertItemClass(level)}">
+      <div class="alert-dot ${alertDotClass(level)}"></div>
+      <div class="alert-text">
+        <div class="at-level" style="color:${alertTextColor(level)}">${esc(level)}</div>
+        <div class="at-msg">${esc(a.message || a.msg || a)}</div>
+      </div>
+    </div>`;
+      }).join('');
+    }
+  </script>
+
+  <script>
+    // ── 5. PERFORMANCE ──────────────────────────────────────────
+    function renderPerformance(perf) {
+      const el = document.getElementById('perf-card');
+      if (!perf) { el.innerHTML = ''; return; }
+      const cdn = perf.cdn || {};
+      const rb = perf.render_blocking || {};
+      const ll = perf.lazy_loading || {};
+      const res = perf.resources || {};
+      const rbList = (rb.resources && rb.resources.length)
+        ? rb.resources.slice(0, 5).map(r => `<div style="font-size:0.75rem;color:var(--muted);padding:0.2rem 0;word-break:break-all">• ${esc(r)}</div>`).join('') +
+        (rb.resources.length > 5 ? `<div style="font-size:0.75rem;color:var(--muted)">…and ${rb.resources.length - 5} more</div>` : '')
+        : '';
+      el.innerHTML = `
+    <div class="card-title">⚡ Advanced Performance</div>
+    <div class="perf-grid">
+      <div class="perf-item"><div class="pi-label">TTFB</div><div class="pi-value">${fmtTime(perf.ttfb)}</div></div>
+      <div class="perf-item"><div class="pi-label">Load Time</div><div class="pi-value">${fmtTime(perf.load_time)}</div></div>
+      <div class="perf-item"><div class="pi-label">Page Size</div><div class="pi-value">${perf.page_size_kb ? (perf.page_size_kb > 2048 ? `<span class="badge badge-bad">${perf.page_size_kb.toFixed(1)} KB</span>` : perf.page_size_kb > 1500 ? `<span class="badge badge-warn">${perf.page_size_kb.toFixed(1)} KB</span>` : `<span class="badge badge-good">${perf.page_size_kb.toFixed(1)} KB</span>`) : '—'}</div></div>
+      <div class="perf-item"><div class="pi-label">CDN</div><div class="pi-value">${cdn.detected ? `<span class="badge badge-good">✓ ${esc(cdn.name || 'Detected')}</span>` : '<span class="badge badge-muted">Not Detected</span>'}</div></div>
+      <div class="perf-item">
+        <div class="pi-label">Render-Blocking</div>
+        <div class="pi-value">${rb.count !== undefined ? rb.count : '—'} resources ${rb.status ? `<span class="badge ${rb.count > 0 ? 'badge-warn' : 'badge-good'}" style="font-size:0.65rem">${esc(rb.status)}</span>` : ''}</div>
+        ${rbList ? `<div style="margin-top:0.4rem">${rbList}</div>` : ''}
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Lazy Loading</div>
+        <div class="pi-value">${ll.lazy_loaded !== undefined ? ll.lazy_loaded : '—'} / ${ll.total !== undefined ? ll.total : '—'} images</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">${ll.not_lazy_count !== undefined ? ll.not_lazy_count + ' not lazy' : ''}${ll.lazy_ratio !== undefined ? ' · ' + (ll.lazy_ratio * 100).toFixed(0) + '% ratio' : ''}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Resources</div>
+      <div class="resource-row">
+        <span class="badge badge-info">CSS: ${res.total_css !== undefined ? res.total_css : '—'}</span>
+        <span class="badge badge-warn">JS: ${res.total_js !== undefined ? res.total_js : '—'}</span>
+        <span class="badge badge-good">Images: ${res.total_images !== undefined ? res.total_images : '—'}</span>
+      </div>
+    </div>
+    <div style="margin-bottom:0.75rem;font-size:0.8rem;color:var(--muted);line-height:1.35">
+      <strong>Core Web Vitals guide:</strong> LCP ≤ 2.5s · INP as low as possible · CLS < 0.1 · TTFB target 200ms
+    </div>
+    <div style="margin-bottom:0.75rem;font-size:0.8rem;color:var(--muted);line-height:1.35">
+      <strong>Page budget:</strong> total page ideally 1–1.5 MB, max 2 MB.
+    </div>
+    ${renderAlertsList(perf.alerts, false)}`;
+    }
+
+    // ── 6. SEO ──────────────────────────────────────────────────
+    function renderSEO(seo) {
+      const el = document.getElementById('seo-card');
+      if (!seo) { el.innerHTML = ''; return; }
+      const title = seo.title || {};
+      const meta = seo.meta_description || {};
+      const hs = seo.heading_structure || {};
+      const alt = seo.alt_tags || {};
+      const bl = seo.broken_links || {};
+      const sm = seo.sitemap || {};
+      const rb = seo.robots_txt || {};
+      const og = seo.open_graph || {};
+      const heads = hs.headings || {};
+      const hChips = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].map(h =>
+        `<span class="h-chip">${h.toUpperCase()}: ${heads[h] !== undefined ? heads[h] : 0}</span>`).join('');
+      el.innerHTML = `
+    <div class="card-title">🔍 SEO Analysis</div>
+    <div class="seo-section">
+      <div class="seo-section-title">Title &amp; Meta Description</div>
+      <div class="seo-row"><span class="seo-key">Title</span><span class="seo-val" style="max-width:60%;text-align:right;word-break:break-word">${esc(title.text || '—')}</span></div>
+      <div class="seo-row"><span class="seo-key">Title Length</span><span class="seo-val">${title.length !== undefined ? title.length + ' chars' : '—'} ${seoStatusBadge(title.status)}</span></div>
+      ${title.message ? `<div style="font-size:0.8rem;color:var(--muted);padding:0.3rem 0">${esc(title.message)}</div>` : ''}
+      <div class="seo-row" style="margin-top:0.5rem"><span class="seo-key">Meta Description</span><span class="seo-val" style="max-width:60%;text-align:right;word-break:break-word">${esc(meta.text || '—')}</span></div>
+      <div class="seo-row"><span class="seo-key">Meta Length</span><span class="seo-val">${meta.length !== undefined ? meta.length + ' chars' : '—'} ${seoStatusBadge(meta.status)}</span></div>
+      ${meta.message ? `<div style="font-size:0.8rem;color:var(--muted);padding:0.3rem 0">${esc(meta.message)}</div>` : ''}
+    </div>
+    <div class="seo-section">
+      <div class="seo-section-title">Heading Structure ${seoStatusBadge(hs.status)}</div>
+      <div class="heading-chips">${hChips}</div>
+    </div>
+    <div class="seo-section">
+      <div class="seo-section-title">Alt Tags ${seoStatusBadge(alt.status)}</div>
+      <div class="seo-row"><span class="seo-key">Total Images</span><span class="seo-val">${alt.total_images !== undefined ? alt.total_images : '—'}</span></div>
+      <div class="seo-row"><span class="seo-key">With Alt</span><span class="seo-val" style="color:var(--good)">${alt.with_alt !== undefined ? alt.with_alt : '—'}</span></div>
+      <div class="seo-row"><span class="seo-key">Missing Alt</span><span class="seo-val" style="color:${alt.missing_alt > 0 ? 'var(--bad)' : 'var(--good)'}">${alt.missing_alt !== undefined ? alt.missing_alt : '—'}</span></div>
+      <div class="seo-row"><span class="seo-key">Empty Alt</span><span class="seo-val">${alt.empty_alt !== undefined ? alt.empty_alt : '—'}</span></div>
+      <div class="seo-row"><span class="seo-key">Missing / Empty Alt</span><span class="seo-val" style="color:${(alt.missing_alt + alt.empty_alt) > 0 ? 'var(--bad)' : 'var(--good)'}">${(alt.missing_alt !== undefined && alt.empty_alt !== undefined) ? alt.missing_alt + alt.empty_alt : '—'}</span></div>
+    </div>
+    <div class="seo-section">
+      <div class="seo-section-title">Broken Links ${seoStatusBadge(bl.status)}</div>
+      <div class="seo-row"><span class="seo-key">Total Checked</span><span class="seo-val">${bl.checked !== undefined ? bl.checked : '—'}</span></div>
+      <div class="seo-row"><span class="seo-key">Broken</span><span class="seo-val" style="color:${bl.broken_count > 0 ? 'var(--bad)' : 'var(--good)'}">${bl.broken_count !== undefined ? bl.broken_count : '—'}</span></div>
+      ${bl.broken_links && bl.broken_links.length ? bl.broken_links.slice(0, 5).map(l => `<div style="font-size:0.75rem;color:var(--bad);padding:0.15rem 0;word-break:break-all">• ${esc(l.url || l)}</div>`).join('') : ''}
+    </div>
+    <div class="seo-section">
+      <div class="seo-section-title">Crawlability</div>
+      <div class="seo-row"><span class="seo-key">Sitemap</span><span class="seo-val">${seoStatusBadge(sm.status || (sm.found ? 'Found' : 'Not Found'))} ${sm.url ? `<a href="${esc(sm.url)}" target="_blank" style="color:var(--info);font-size:0.75rem;margin-left:0.3rem">↗</a>` : ''}</span></div>
+      <div class="seo-row"><span class="seo-key">robots.txt</span><span class="seo-val">${seoStatusBadge(rb.status || (rb.found ? 'Found' : 'Not Found'))} ${rb.url ? `<a href="${esc(rb.url)}" target="_blank" style="color:var(--info);font-size:0.75rem;margin-left:0.3rem">↗</a>` : ''}</span></div>
+    </div>
+    <div class="seo-section">
+      <div class="seo-section-title">Open Graph ${seoStatusBadge(og.status)}</div>
+      <div class="seo-row"><span class="seo-key">OG Title</span><span class="seo-val" style="max-width:60%;text-align:right;word-break:break-word">${esc(og.title || '—')}</span></div>
+      <div class="seo-row"><span class="seo-key">OG Description</span><span class="seo-val" style="max-width:60%;text-align:right;word-break:break-word">${esc(og.description || '—')}</span></div>
+      <div class="seo-row"><span class="seo-key">OG Image</span><span class="seo-val">${og.image ? `<a href="${esc(og.image)}" target="_blank" style="color:var(--info)">View</a>` : '—'}</span></div>
+    </div>
+    ${renderAlertsList(seo.alerts, false)}`;
+    }
+
+    // ── 7. SECURITY ─────────────────────────────────────────────
+    function renderSecurity(sec) {
+      const el = document.getElementById('sec-card');
+      if (!sec) { el.innerHTML = ''; return; }
+      const https = sec.https || {};
+      const ssl = sec.ssl || {};
+      const headers = sec.headers || {};
+      const hmap = headers.headers || {};
+
+      const headerDescriptions = {
+        'Strict-Transport-Security': { importance: 'Critical', desc: 'Forces HTTPS connections' },
+        'Content-Security-Policy': { importance: 'Critical', desc: 'Prevents XSS attacks' },
+        'X-Frame-Options': { importance: 'High', desc: 'Prevents clickjacking' },
+        'X-Content-Type-Options': { importance: 'High', desc: 'Prevents MIME sniffing' },
+        'Referrer-Policy': { importance: 'Medium', desc: 'Controls referrer info' },
+        'Permissions-Policy': { importance: 'Medium', desc: 'Controls browser features' },
+        'X-XSS-Protection': { importance: 'Medium', desc: 'Legacy XSS filter' },
+        'Cache-Control': { importance: 'Low', desc: 'Controls caching behavior' },
+      };
+
+      const headerRows = Object.entries(hmap).map(([name, val]) => {
+        const present = val && val !== false && val !== 'missing' && val !== null;
+        const info = headerDescriptions[name] || { importance: 'Medium', desc: '' };
+        const impColor = info.importance === 'Critical' ? 'var(--bad)' : info.importance === 'High' ? 'var(--warn)' : 'var(--muted)';
+        return `<tr>
+      <td style="font-size:0.8rem;font-family:monospace;color:var(--text)">${esc(name)}</td>
+      <td>${present ? '<span class="badge badge-good">✓ Yes</span>' : '<span class="badge badge-bad">✗ No</span>'}</td>
+      <td style="font-size:0.75rem;color:${impColor};font-weight:600">${info.importance}</td>
+      <td style="font-size:0.75rem;color:var(--muted)">${info.desc}</td>
+    </tr>`;
+      }).join('');
+
+      const coverage = headers.coverage_percent !== undefined ? headers.coverage_percent : '—';
+      const coverColor = typeof coverage === 'number'
+        ? coverage >= 75 ? 'var(--good)'
+          : coverage >= 50 ? 'var(--warn)'
+            : 'var(--bad)'
+        : 'var(--muted)';
+
+      const missingCritical = headers.missing_critical || [];
+      const missingHigh = headers.missing_high || [];
+
+      el.innerHTML = `
+    <div class="card-title">🔒 Security</div>
+    <div class="perf-grid" style="margin-bottom:1rem">
+      <div class="perf-item">
+        <div class="pi-label">HTTPS</div>
+        <div class="pi-value">${https.is_https ? '<span class="badge badge-good">🔒 Secure</span>' : '<span class="badge badge-bad">⚠ Not Secure</span>'}</div>
+        ${https.status ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">${esc(https.status)}</div>` : ''}
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">SSL Certificate</div>
+        <div class="pi-value">${ssl.valid ? '<span class="badge badge-good">✓ Valid</span>' : '<span class="badge badge-bad">✗ Invalid</span>'}</div>
+        ${ssl.message ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">${esc(ssl.message)}</div>` : ''}
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Header Coverage</div>
+        <div class="pi-value" style="color:${coverColor}">${coverage !== '—' ? coverage + '%' : '—'}</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">${headers.present_count !== undefined ? headers.present_count : '—'} / ${headers.total_checked !== undefined ? headers.total_checked : '—'} headers</div>
+      </div>
+    </div>
+    <div class="progress-bar-wrap" style="margin-bottom:1rem">
+      <div class="progress-bar-fill" style="width:${coverage}%;background:${coverColor}"></div>
+    </div>
+    ${missingCritical.length || missingHigh.length ? `
+    <div style="margin-bottom:1rem">
+      ${missingCritical.length ? `<div style="margin-bottom:0.5rem"><span style="font-size:0.75rem;color:var(--bad);font-weight:600;text-transform:uppercase">Missing Critical:</span> ${missingCritical.map(h => `<span class="badge badge-bad" style="margin:0.15rem">${esc(h)}</span>`).join('')}</div>` : ''}
+      ${missingHigh.length ? `<div><span style="font-size:0.75rem;color:var(--warn);font-weight:600;text-transform:uppercase">Missing High:</span> ${missingHigh.map(h => `<span class="badge badge-warn" style="margin:0.15rem">${esc(h)}</span>`).join('')}</div>` : ''}
+    </div>` : ''}
+    ${headerRows ? `
+    <div style="overflow-x:auto">
+      <table class="sec-table">
+        <thead><tr><th>Header</th><th>Present</th><th>Importance</th><th>Description</th></tr></thead>
+        <tbody>${headerRows}</tbody>
+      </table>
+    </div>` : ''}
+    ${renderAlertsList(sec.alerts, false)}`;
+    }
+
+    // ── 8. HISTORY CHARTS ───────────────────────────────────────
+    let chartLoadtime = null;
+    let chartScores = null;
+
+    async function loadHistoryCharts(url) {
+      try {
+        const resp = await fetch('/api/history-stats/?url=' + encodeURIComponent(url));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.labels || data.labels.length < 2) return;
+
+        document.getElementById('charts-card').style.display = 'block';
+
+        const chartDefaults = {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.5)' } },
+            y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.5)' } }
+          }
+        };
+
+        // Chart 1: Load Time
+        if (chartLoadtime) chartLoadtime.destroy();
+        const ctx1 = document.getElementById('chart-loadtime').getContext('2d');
+        chartLoadtime = new Chart(ctx1, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: 'Load Time (ms)',
+              data: data.load_times,
+              borderColor: '#60a5fa',
+              backgroundColor: 'rgba(96,165,250,0.1)',
+              tension: 0.4, fill: true, pointRadius: 4,
+              pointBackgroundColor: '#60a5fa'
+            }]
+          },
+          options: { ...chartDefaults }
+        });
+
+        // Chart 2: Scores
+        if (chartScores) chartScores.destroy();
+        const ctx2 = document.getElementById('chart-scores').getContext('2d');
+        chartScores = new Chart(ctx2, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [
+              { label: 'Performance', data: data.performance_scores, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.05)', tension: 0.4, fill: false, pointRadius: 3 },
+              { label: 'SEO', data: data.seo_scores, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.05)', tension: 0.4, fill: false, pointRadius: 3 },
+              { label: 'Security', data: data.security_scores, borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.05)', tension: 0.4, fill: false, pointRadius: 3 },
+              { label: 'Overall', data: data.overall_scores, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.05)', tension: 0.4, fill: false, pointRadius: 3, borderWidth: 2 },
+            ]
+          },
+          options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100 } } }
+        });
+      } catch (e) { /* silently skip charts if history unavailable */ }
+    }
+
+    // ── 9. IMAGE ANALYSIS ───────────────────────────────────────
+    function renderImageAnalysis(imagesData) {
+      const el = document.getElementById('image-card');
+      if (!imagesData || imagesData.total_images === undefined) {
+        el.innerHTML = '';
+        return;
+      }
+
+      const summary = imagesData.summary || {};
+      const total = imagesData.total_images !== undefined ? imagesData.total_images : '—';
+      const oversized = summary.oversized_count !== undefined ? summary.oversized_count : '—';
+      const missingAlt = summary.missing_alt !== undefined ? summary.missing_alt : '—';
+      const optimized = (typeof total === 'number' && typeof oversized === 'number') ? total - oversized : '—';
+
+      let suggestionsHtml = '';
+      if (imagesData.images && imagesData.images.length > 0) {
+        const suggestions = imagesData.images
+          .filter(img => img.suggestion && img.size_status !== 'good')
+          .slice(0, 5)
+          .map(img => {
+            let name = img.src.split('/').pop() || 'image';
+            if (name.length > 30) name = name.substring(0, 30) + '...';
+            return `<div class="alert-item alert-warning"><div class="alert-dot dot-warning"></div><div class="alert-text"><div class="at-msg"><strong>${esc(name)}</strong>: ${esc(img.suggestion)}</div></div></div>`;
+          });
+
+        const altSuggestions = imagesData.images
+          .filter(img => img.issues && img.issues.includes('Missing alt text'))
+          .slice(0, 3)
+          .map(img => {
+            let name = img.src.split('/').pop() || 'image';
+            if (name.length > 30) name = name.substring(0, 30) + '...';
+            return `<div class="alert-item alert-info"><div class="alert-dot dot-info"></div><div class="alert-text"><div class="at-msg">Add ALT tag for <strong>${esc(name)}</strong></div></div></div>`;
+          });
+
+        if (suggestions.length > 0 || altSuggestions.length > 0) {
+          suggestionsHtml = `
+        <div style="margin-top:1rem">
+          <div style="font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Optimization Suggestions</div>
+          ${suggestions.join('')}
+          ${altSuggestions.join('')}
+        </div>
+      `;
+        }
+      }
+
+      el.innerHTML = `
+    <div class="card-title">🖼️ Image Analysis</div>
+    <div class="perf-grid">
+      <div class="perf-item">
+        <div class="pi-label">Total Images</div>
+        <div class="pi-value">${total}</div>
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Optimized Images</div>
+        <div class="pi-value"><span style="color:var(--good)">${optimized !== '—' ? esc(optimized) : '—'}</span></div>
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Needs Compression</div>
+        <div class="pi-value">${typeof oversized === 'number' ? (oversized > 0 ? `<span style="color:var(--warn)">${oversized}</span>` : `<span style="color:var(--good)">${oversized}</span>`) : '—'}</div>
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Missing ALT Tags</div>
+        <div class="pi-value">${typeof missingAlt === 'number' ? (missingAlt > 0 ? `<span style="color:var(--warn)">${missingAlt}</span>` : `<span style="color:var(--good)">${missingAlt}</span>`) : '—'}</div>
+      </div>
+      <div class="perf-item">
+        <div class="pi-label">Total Size</div>
+        <div class="pi-value">${summary.total_size_kb ? summary.total_size_kb.toFixed(1) + ' KB' : '—'}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:0.75rem;font-size:0.8rem;color:var(--muted);line-height:1.35">
+      <strong>Image budget:</strong> keep individual images near 100–200 KB and total image payload under 2 MB.
+    </div>
+    ${suggestionsHtml}
+  `;
+    }
+  </script>
+</body>
+
+</html>

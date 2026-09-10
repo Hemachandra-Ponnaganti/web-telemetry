@@ -1,0 +1,28 @@
+/* ==========================================
+   ROOT BASELINE — Enterprise Blue & White
+   Sets the 14px content floor globally so
+   no element inherits a smaller default.
+   ========================================== */
+html {
+  font-size: 14px;              /* WCAG readability floor */
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  font-size: 1rem;              /* 14px (relative to html root) */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #e8edf5;               /* Dark mode default; overridden per theme */
+  background-color: #07111f;
+}
+
+code, pre, kbd, samp {
+  font-family: 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas,
+    'Courier New', monospace;
+  font-size: 0.9286rem;         /* ~13px — smallest allowed for mono code */
+}

@@ -1,0 +1,1086 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analysis History – WebMonitor</title>
+  <style>
+    :root {
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --info: #60a5fa;
+      --card: #cacced;
+      --border: #334155;
+      --muted: #94a3b8;
+      --bg: #eceef2;
+      --text: #0b0f15;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: rgba(15, 17, 21, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    nav {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    nav a:hover,
+    nav a.active {
+      color: var(--text);
+      background: var(--card);
+    }
+
+    main {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 240px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      padding: 0.6rem 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      padding: 0.6rem 1.25rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #f7f4f4;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #fff;
+    }
+
+    .total-badge {
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.4rem 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    /* TABLE */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead tr {
+      background: rgba(30, 41, 59, 0.8);
+    }
+
+    th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr {
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover {
+      background: rgba(99, 102, 241, 0.04);
+    }
+
+    tbody tr.row-up {
+      border-left: 3px solid var(--good);
+    }
+
+    tbody tr.row-down {
+      border-left: 3px solid var(--bad);
+    }
+
+    .score-cell {
+      font-weight: 600;
+    }
+
+    .score-good {
+      color: var(--good);
+    }
+
+    .score-warn {
+      color: var(--warn);
+    }
+
+    .score-bad {
+      color: var(--bad);
+    }
+
+    .score-muted {
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .badge-good {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--good);
+    }
+
+    .badge-bad {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--bad);
+    }
+
+    .badge-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warn);
+    }
+
+    .badge-info {
+      background: rgba(96, 165, 250, 0.15);
+      color: var(--info);
+    }
+
+    .badge-muted {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--muted);
+    }
+
+    .url-cell {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--info);
+      font-size: 0.8rem;
+    }
+
+    .btn-view {
+      padding: 0.3rem 0.75rem;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-view:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* PAGINATION */
+    .pagination {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .page-btn {
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 36px;
+      text-align: center;
+    }
+
+    .page-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .page-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center;
+      padding: 5rem 2rem;
+      color: var(--muted);
+    }
+
+    .empty-state .es-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    /* SPINNER */
+    .spinner-wrap {
+      text-align: center;
+      padding: 3rem;
+    }
+
+    .spinner-ring {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 0.75rem;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 860px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+      position: relative;
+    }
+
+    .modal-title {
+      display: inline-block;
+      max-width: calc(100% - 160px);
+      word-break: break-word;
+    }
+
+    .btn-primary {
+      min-width: 110px;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 1rem;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      padding-right: 2rem;
+      word-break: break-all;
+    }
+
+    /* DETAIL SECTIONS */
+    .detail-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .detail-item {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 0.75rem;
+    }
+
+    .detail-item .di-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .detail-item .di-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 0.2rem;
+    }
+
+    .score-rings-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .mini-ring-card {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .mini-ring-card .mr-score {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .mini-ring-card .mr-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 768px) {
+      main {
+        padding: 1rem 1rem 3rem;
+      }
+
+      header {
+        padding: 0 1rem;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .search-input {
+        min-width: unset;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-box {
+        max-width: 100%;
+        padding: 1.25rem;
+      }
+
+      th,
+      td {
+        padding: 0.5rem 0.6rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="logo"> WebMonitor</div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/history/" class="active">History</a>
+    </nav>
+  </header>
+  <main>
+    <h1> Analysis History</h1>
+    <div class="toolbar">
+      <input type="text" class="search-input" id="search-input" placeholder="Filter by URL" oninput="onSearchInput()">
+      <button class="btn btn-primary" onclick="loadHistory()"> Refresh</button>
+      <div class="total-badge" id="total-badge">Loading</div>
+    </div>
+    <div id="history-summary" class="stats-grid" style="margin-bottom:1.5rem; display:none"></div>
+    <div id="table-area">
+      <div class="spinner-wrap">
+        <div class="spinner-ring"></div>
+        <div style="color:var(--muted);font-size:0.875rem">Loading reports</div>
+      </div>
+    </div>
+    <div class="card" id="history-charts-card" style="display:none;margin-bottom:1.5rem">
+      <div class="card-title">📈 History Charts</div>
+      <div class="charts-grid">
+        <div class="chart-wrap">
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">Load Time Trend</div>
+          <canvas id="history-chart-loadtime"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">Score Trend</div>
+          <canvas id="history-chart-scores"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </main>
+
+  <!-- MODAL -->
+  <div class="modal-overlay hidden" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+    <div class="modal-box" id="modal-box">
+      <button class="modal-close" onclick="closeModal()"></button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    // ── STATE ──────────────────────────────────────────────────
+    const PAGE_SIZE = 20;
+    let allReports = [];
+    let currentPage = 1;
+    let totalReports = 0;
+    let totalPages = 1;
+    let currentFilter = '';
+    let currentModalData = null;
+    let searchTimer = null;
+
+    // ── UTILS ──────────────────────────────────────────────────
+    function esc(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function scoreClass(s) {
+      if (s === null || s === undefined) return 'score-muted';
+      if (s >= 75) return 'score-good';
+      if (s >= 50) return 'score-warn';
+      return 'score-bad';
+    }
+    function scoreColor(s) {
+      if (s === null || s === undefined) return 'var(--muted)';
+      if (s >= 75) return 'var(--good)';
+      if (s >= 50) return 'var(--warn)';
+      return 'var(--bad)';
+    }
+    function fmtTime(ms) {
+      if (ms === null || ms === undefined) return '—';
+      const value = Number(ms);
+      if (Number.isNaN(value)) return String(ms);
+      if (value >= 1) return value.toFixed(2) + 's';
+      return Math.round(value * 1000) + 'ms';
+    }
+    function fmtDate(str) {
+      if (!str) return '—';
+      try { return new Date(str).toLocaleString(); } catch (e) { return str; }
+    }
+    function seoStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'good' || s === 'ok' || s === 'found' || s === 'present') return `<span class="badge badge-good">${esc(status)}</span>`;
+      if (s === 'warning' || s === 'warn' || s === 'missing' || s === 'not found') return `<span class="badge badge-warn">${esc(status)}</span>`;
+      if (s === 'error' || s === 'bad' || s === 'broken') return `<span class="badge badge-bad">${esc(status)}</span>`;
+      return `<span class="badge badge-muted">${esc(status || '—')}</span>`;
+    }
+
+    // ── LOAD HISTORY ───────────────────────────────────────────
+    async function loadHistory(page = 1) {
+      document.getElementById('table-area').innerHTML = `<div class="spinner-wrap"><div class="spinner-ring"></div><div style="color:var(--muted);font-size:0.875rem">Loading reports…</div></div>`;
+      document.getElementById('pagination').innerHTML = '';
+      document.getElementById('total-badge').textContent = 'Loading…';
+      try {
+        currentFilter = document.getElementById('search-input').value.trim();
+        let apiUrl = `/api/history-data/?page=${page}&page_size=${PAGE_SIZE}`;
+        if (currentFilter) apiUrl += '&url=' + encodeURIComponent(currentFilter);
+        const resp = await fetch(apiUrl);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        allReports = data.reports || [];
+        currentPage = data.page || page;
+        totalReports = data.total || 0;
+        totalPages = data.total_pages || 1;
+        document.getElementById('total-badge').textContent = `${totalReports} report${totalReports !== 1 ? 's' : ''}`;
+        renderTable();
+        renderHistorySummary(data);
+        loadHistoryCharts();
+      } catch (err) {
+        document.getElementById('table-area').innerHTML = `<div class="empty-state"><div class="es-icon">⚠</div><p style="color:var(--bad)">${esc(err.message)}</p></div>`;
+        document.getElementById('total-badge').textContent = 'Error';
+      }
+    }
+
+    // ── SEARCH ─────────────────────────────────────────────────
+    function onSearchInput() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        loadHistory(1);
+      }, 300);
+    }
+
+    // ── RENDER TABLE ───────────────────────────────────────────
+    function renderTable() {
+      const area = document.getElementById('table-area');
+      if (!allReports.length) {
+        area.innerHTML = `<div class="empty-state"><div class="es-icon">📭</div><p>No reports found.</p></div>`;
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+      const rows = allReports.map(r => {
+        const isUp = r.is_up !== undefined ? r.is_up : (r.check ? r.check.is_up : null);
+        const statusCode = r.status_code || (r.check ? r.check.status_code : null) || (r.errors ? r.errors.status_code : null);
+        const loadTime = r.load_time || (r.check ? r.check.load_time : null);
+        const perfScore = r.performance_score || (r.performance ? r.performance.performance_score : null);
+        const seoScore = r.seo_score || (r.seo ? r.seo.seo_score : null);
+        const secScore = r.security_score || (r.security ? r.security.security_score : null);
+        const overall = r.overall_score;
+        const rowClass = isUp === true ? 'row-up' : isUp === false ? 'row-down' : '';
+        return `<tr class="${rowClass}">
+      <td style="white-space:nowrap;font-size:0.8rem;color:var(--muted)">${fmtDate(r.analyzed_at)}</td>
+      <td><div class="url-cell" title="${esc(r.url)}">${esc(r.url || '—')}</div></td>
+      <td>${isUp === true ? '<span class="badge badge-good">● UP</span>' : isUp === false ? '<span class="badge badge-bad">● DOWN</span>' : '<span class="badge badge-muted">—</span>'}</td>
+      <td style="font-weight:600;color:${statusCode && statusCode < 400 ? 'var(--good)' : statusCode ? 'var(--bad)' : 'var(--muted)'}">${statusCode || '—'}</td>
+      <td>${fmtTime(loadTime)}</td>
+      <td class="score-cell ${scoreClass(perfScore)}">${perfScore !== null && perfScore !== undefined ? Math.round(perfScore) : '—'}</td>
+      <td class="score-cell ${scoreClass(seoScore)}">${seoScore !== null && seoScore !== undefined ? Math.round(seoScore) : '—'}</td>
+      <td class="score-cell ${scoreClass(secScore)}">${secScore !== null && secScore !== undefined ? Math.round(secScore) : '—'}</td>
+      <td class="score-cell ${scoreClass(overall)}">${overall !== null && overall !== undefined ? Math.round(overall) : '—'}</td>
+      <td><button class="btn-view" onclick="viewReport(${r.id || r.report_id || 'null'})">View Details</button></td>
+    </tr>`;
+      }).join('');
+
+      area.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date / Time</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th>HTTP</th>
+            <th>Load Time</th>
+            <th>Perf</th>
+            <th>SEO</th>
+            <th>Security</th>
+            <th>Overall</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+      renderPagination(totalPages);
+    }
+
+    // ── PAGINATION ─────────────────────────────────────────────
+    function renderPagination(pageCount) {
+      const pg = document.getElementById('pagination');
+      if (!pageCount || pageCount <= 1) { pg.innerHTML = ''; return; }
+      let html = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹</button>`;
+      const range = [];
+      for (let i = 1; i <= pageCount; i++) {
+        if (i === 1 || i === pageCount || (i >= currentPage - 2 && i <= currentPage + 2)) range.push(i);
+        else if (range[range.length - 1] !== '…') range.push('…');
+      }
+      range.forEach(p => {
+        if (p === '…') html += `<span class="page-btn" style="cursor:default">…</span>`;
+        else html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+      });
+      html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === pageCount ? 'disabled' : ''}>›</button>`;
+      pg.innerHTML = html;
+    }
+    function goPage(p) {
+      if (p < 1 || p > totalPages) return;
+      currentPage = p;
+      loadHistory(p);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── VIEW REPORT DETAIL ─────────────────────────────────────
+    async function viewReport(id) {
+      if (!id) return;
+      currentModalData = null;
+      document.getElementById('modal-content').innerHTML = `<div class="spinner-wrap"><div class="spinner-ring"></div></div>`;
+      document.getElementById('modal-overlay').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      try {
+        const resp = await fetch('/api/history-data/' + id + '/');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        renderModalContent(data);
+      } catch (err) {
+        document.getElementById('modal-content').innerHTML = `<div style="color:var(--bad);padding:1rem">${esc(err.message)}</div>`;
+      }
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+    function closeModalOnOverlay(e) {
+      if (e.target === document.getElementById('modal-overlay')) closeModal();
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    function exportReportPdf() {
+      if (!currentModalData) return;
+      const { url, report_id, analyzed_at, created_at, check = {}, seo = {}, performance = {}, security = {}, alerts = [], all_alerts = [] } = currentModalData;
+      const doc = new jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+      let y = 40;
+      doc.setFontSize(14);
+      doc.text(`WebMonitor Report`, 40, y);
+      doc.setFontSize(10);
+      y += 24;
+      doc.text(`URL: ${url || 'N/A'}`, 40, y);
+      y += 16;
+      doc.text(`Report ID: ${report_id || 'N/A'}`, 40, y);
+      y += 16;
+      doc.text(`Analyzed at: ${analyzed_at || created_at || 'N/A'}`, 40, y);
+      y += 24;
+      const addLine = (label, value) => {
+        doc.text(`${label}: ${value}`, 40, y);
+        y += 16;
+        if (y > 740) { doc.addPage(); y = 40; }
+      };
+      addLine('Status', check.is_up ? 'Online' : 'Offline');
+      addLine('HTTP Code', check.status_code || '—');
+      addLine('Load Time', check.load_time !== undefined ? `${check.load_time}s` : '—');
+      addLine('Overall Score', currentModalData.overall_score !== undefined ? `${currentModalData.overall_score}` : '—');
+      addLine('Performance Score', performance.performance_score !== undefined ? `${performance.performance_score}` : '—');
+      addLine('SEO Score', seo.seo_score !== undefined ? `${seo.seo_score}` : '—');
+      addLine('Security Score', security.security_score !== undefined ? `${security.security_score}` : '—');
+      y += 12;
+      doc.setFontSize(12);
+      doc.text('Alerts', 40, y);
+      y += 18;
+      const reportAlerts = alerts.length ? alerts : all_alerts;
+      if (reportAlerts.length) {
+        reportAlerts.slice(0, 10).forEach(a => {
+          const msg = `${a.level || a.category || 'Info'}: ${a.message || a.msg || ''}`;
+          const lines = doc.splitTextToSize(msg, 500);
+          doc.text(lines, 40, y);
+          y += lines.length * 14 + 6;
+          if (y > 740) { doc.addPage(); y = 40; }
+        });
+      } else {
+        addLine('Alerts', 'No alerts found.');
+      }
+      doc.save(`webmonitor-report-${report_id || 'detail'}.pdf`);
+    }
+
+    // ── HISTORY SUMMARY & CHARTS ───────────────────────────────
+    let historyChartLoadtime = null;
+    let historyChartScores = null;
+
+    function renderHistorySummary(data) {
+      const summaryEl = document.getElementById('history-summary');
+      if (!data || !data.reports) {
+        summaryEl.style.display = 'none';
+        return;
+      }
+      const reports = data.reports;
+      const loaded = reports.length;
+      const avgPerf = reports.reduce((sum, r) => sum + (r.performance_score || 0), 0) / (loaded || 1);
+      const avgSeo = reports.reduce((sum, r) => sum + (r.seo_score || 0), 0) / (loaded || 1);
+      const avgSec = reports.reduce((sum, r) => sum + (r.security_score || 0), 0) / (loaded || 1);
+      const avgOverall = reports.reduce((sum, r) => sum + (r.overall_score || 0), 0) / (loaded || 1);
+      const upCount = reports.filter(r => r.is_up).length;
+
+      summaryEl.style.display = 'grid';
+      summaryEl.innerHTML = `
+      <div class="stat-card"><div class="stat-label">Reports Loaded</div><div class="stat-value">${loaded}</div><div class="stat-sub">Current page</div></div>
+      <div class="stat-card"><div class="stat-label">Online Rate</div><div class="stat-value">${upCount}/${loaded}</div><div class="stat-sub">Healthy reports</div></div>
+      <div class="stat-card"><div class="stat-label">Avg. Performance</div><div class="stat-value">${Math.round(avgPerf)}</div><div class="stat-sub">Based on visible reports</div></div>
+      <div class="stat-card"><div class="stat-label">Avg. Overall</div><div class="stat-value">${Math.round(avgOverall)}</div><div class="stat-sub">Latest overview</div></div>
+      `;
+    }
+
+    async function loadHistoryCharts() {
+      const filter = document.getElementById('search-input').value.trim();
+      try {
+        const resp = await fetch('/api/history-stats/?url=' + encodeURIComponent(filter));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.labels || data.labels.length < 2) {
+          document.getElementById('history-charts-card').style.display = 'none';
+          return;
+        }
+
+        document.getElementById('history-charts-card').style.display = 'block';
+
+        const chartOptions = {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { labels: { color: '#64748b', font: { family: 'Inter', size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.2)' } },
+            y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.2)' } }
+          }
+        };
+
+        if (historyChartLoadtime) historyChartLoadtime.destroy();
+        const ctxA = document.getElementById('history-chart-loadtime').getContext('2d');
+        historyChartLoadtime = new Chart(ctxA, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: 'Load Time (s)',
+              data: data.load_times.map(v => v || null),
+              borderColor: '#60a5fa',
+              backgroundColor: 'rgba(96,165,250,0.12)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 3,
+            }, {
+              label: 'Target 2.5s',
+              data: data.labels.map(() => 2.5),
+              borderColor: '#22c55e',
+              borderDash: [6, 4],
+              pointRadius: 0,
+              tension: 0,
+              fill: false,
+            }, {
+              label: 'Ideal 1.5s',
+              data: data.labels.map(() => 1.5),
+              borderColor: '#64748b',
+              borderDash: [4, 4],
+              pointRadius: 0,
+              tension: 0,
+              fill: false,
+            }]
+          },
+          options: {
+            ...chartOptions,
+            scales: {
+              ...chartOptions.scales,
+              y: {
+                min: 0,
+                suggestedMax: Math.max(3, ...data.load_times.filter(v => typeof v === 'number')) + 0.5,
+                ticks: {
+                  callback: value => value >= 1 ? value.toFixed(1) : value.toString(),
+                }
+              }
+            }
+          }
+        });
+
+        if (historyChartScores) historyChartScores.destroy();
+        const ctxB = document.getElementById('history-chart-scores').getContext('2d');
+        historyChartScores = new Chart(ctxB, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [
+              { label: 'Performance', data: data.performance_scores.map(v => v || null), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', tension: 0.35, pointRadius: 2 },
+              { label: 'SEO', data: data.seo_scores.map(v => v || null), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)', tension: 0.35, pointRadius: 2 },
+              { label: 'Security', data: data.security_scores.map(v => v || null), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.12)', tension: 0.35, pointRadius: 2 },
+              { label: 'Overall', data: data.overall_scores.map(v => v || null), borderColor: '#0ea5e9', backgroundColor: 'rgba(14,165,233,0.12)', tension: 0.35, pointRadius: 3, borderWidth: 2 }
+            ]
+          },
+          options: { ...chartOptions, scales: { ...chartOptions.scales, y: { min: 0, max: 100 } } }
+        });
+      } catch (e) {
+        document.getElementById('history-charts-card').style.display = 'none';
+      }
+    }
+
+    //  INIT 
+    loadHistory();
+    function renderModalContent(data) {
+      currentModalData = data;
+      const check = data.check || {};
+      const errors = data.errors || {};
+      const seo = data.seo || {};
+      const perf = data.performance || {};
+      const sec = data.security || {};
+      const allAlerts = data.alerts || data.all_alerts || [];
+
+      const perfScore = perf.performance_score;
+      const seoScore = seo.seo_score;
+      const secScore = sec.security_score;
+      const overall = data.overall_score;
+
+      const scoreRings = [
+        { label: 'Overall', score: overall, color: scoreColor(overall) },
+        { label: 'Performance', score: perfScore, color: scoreColor(perfScore) },
+        { label: 'SEO', score: seoScore, color: scoreColor(seoScore) },
+        { label: 'Security', score: secScore, color: scoreColor(secScore) },
+      ].map(s => `
+    <div class="mini-ring-card">
+      <div class="mr-score" style="color:${s.color}">${s.score !== null && s.score !== undefined ? Math.round(s.score) : '—'}</div>
+      <div class="mr-label">${s.label}</div>
+    </div>`).join('');
+
+      // Security headers table
+      const hmap = (sec.headers && sec.headers.headers) ? sec.headers.headers : {};
+      const secHeaderRows = Object.entries(hmap).map(([name, val]) => {
+        const present = val && val !== false && val !== 'missing' && val !== null;
+        return `<tr>
+      <td style="font-size:0.78rem;font-family:monospace">${esc(name)}</td>
+      <td>${present ? '<span class="badge badge-good">✓</span>' : '<span class="badge badge-bad">✗</span>'}</td>
+    </tr>`;
+      }).join('');
+
+      // Alerts
+      const alertsHtml = allAlerts.length ? allAlerts.map(a => {
+        const level = a.level || a.type || 'info';
+        const lc = level.toLowerCase();
+        const cls = lc === 'critical' ? 'badge-bad' : lc === 'warning' || lc === 'warn' ? 'badge-warn' : lc === 'ok' ? 'badge-good' : 'badge-info';
+        return `<div style="display:flex;gap:0.5rem;align-items:flex-start;padding:0.5rem 0;border-bottom:1px solid rgba(51,65,85,0.3)">
+      <span class="badge ${cls}" style="flex-shrink:0;margin-top:0.1rem">${esc(level)}</span>
+      <span style="font-size:0.85rem">${esc(a.message || a.msg || a)}</span>
+    </div>`;
+      }).join('') : '<div style="color:var(--muted);font-size:0.875rem">No alerts.</div>';
+
+      // SEO headings
+      const heads = (seo.heading_structure && seo.heading_structure.headings) ? seo.heading_structure.headings : {};
+      const hChips = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].map(h =>
+        `<span style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.5rem;font-size:0.75rem;font-weight:600">${h.toUpperCase()}: ${heads[h] || 0}</span>`).join(' ');
+
+      document.getElementById('modal-content').innerHTML = `
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1rem">
+        <div class="modal-title">Report: ${esc(data.url || '—')}</div>
+        <button class="btn btn-primary" style="height:40px;white-space:nowrap" onclick="exportReportPdf()">Export PDF</button>
+      </div>
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1.25rem">
+       ID: ${esc(data.report_id || data.id || '—')} &nbsp;&nbsp;  ${fmtDate(data.analyzed_at || data.created_at || data.timestamp)}
+    </div>
+
+    <!-- Scores -->
+    <div class="detail-section">
+      <div class="detail-section-title"> Scores</div>
+      <div class="score-rings-row">${scoreRings}</div>
+    </div>
+
+    <!-- Status -->
+    <div class="detail-section">
+      <div class="detail-section-title"> Website Status</div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="di-label">Status</div><div class="di-value">${check.is_up ? '<span class="badge badge-good"> UP</span>' : '<span class="badge badge-bad"> DOWN</span>'}</div></div>
+        <div class="detail-item"><div class="di-label">HTTP Code</div><div class="di-value" style="color:${check.status_code && check.status_code < 400 ? 'var(--good)' : 'var(--bad)'}">${check.status_code || '—'}</div></div>
+        <div class="detail-item"><div class="di-label">Load Time</div><div class="di-value">${fmtTime(check.load_time)}</div></div>
+        <div class="detail-item"><div class="di-label">TTFB</div><div class="di-value">${fmtTime(check.ttfb)}</div></div>
+        <div class="detail-item"><div class="di-label">Page Size</div><div class="di-value">${check.page_size_kb ? check.page_size_kb.toFixed(1) + ' KB' : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">Perf Rating</div><div class="di-value">${esc(check.perf_rating || '—')}</div></div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="detail-section">
+      <div class="detail-section-title"> Error Detection</div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="di-label">Severity</div><div class="di-value">${esc(errors.severity || '—')}</div></div>
+        <div class="detail-item"><div class="di-label">Category</div><div class="di-value">${esc(errors.category || '—')}</div></div>
+        <div class="detail-item"><div class="di-label">HTTPS</div><div class="di-value">${errors.is_https ? '<span class="badge badge-good"> Yes</span>' : '<span class="badge badge-bad">No</span>'}</div></div>
+        <div class="detail-item"><div class="di-label">Label</div><div class="di-value">${esc(errors.label || '—')}</div></div>
+      </div>
+      ${errors.message ? `<div style="margin-top:0.5rem;padding:0.6rem;background:var(--bg);border-radius:8px;font-size:0.8rem;color:var(--muted)">${esc(errors.message)}</div>` : ''}
+    </div>
+
+    <!-- SEO -->
+    <div class="detail-section">
+      <div class="detail-section-title"> SEO Analysis</div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="di-label">SEO Score</div><div class="di-value" style="color:${scoreColor(seo.seo_score)}">${seo.seo_score !== undefined ? Math.round(seo.seo_score) : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">Title Status</div><div class="di-value">${seoStatusBadge(seo.title && seo.title.status)}</div></div>
+        <div class="detail-item"><div class="di-label">Meta Status</div><div class="di-value">${seoStatusBadge(seo.meta_description && seo.meta_description.status)}</div></div>
+        <div class="detail-item"><div class="di-label">Alt Tags</div><div class="di-value">${seoStatusBadge(seo.alt_tags && seo.alt_tags.status)}</div></div>
+        <div class="detail-item"><div class="di-label">Broken Links</div><div class="di-value" style="color:${seo.broken_links && seo.broken_links.broken_count > 0 ? 'var(--bad)' : 'var(--good)'}">${seo.broken_links ? seo.broken_links.broken_count : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">Sitemap</div><div class="di-value">${seoStatusBadge(seo.sitemap && (seo.sitemap.status || (seo.sitemap.found ? 'Found' : 'Not Found')))}</div></div>
+      </div>
+      ${hChips ? `<div style="margin-top:0.75rem;display:flex;gap:0.4rem;flex-wrap:wrap">${hChips}</div>` : ''}
+    </div>
+
+    <!-- Performance -->
+    <div class="detail-section">
+      <div class="detail-section-title"> Performance</div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="di-label">Score</div><div class="di-value" style="color:${scoreColor(perf.performance_score)}">${perf.performance_score !== undefined ? Math.round(perf.performance_score) : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">Load Time</div><div class="di-value">${fmtTime(perf.load_time)}</div></div>
+        <div class="detail-item"><div class="di-label">TTFB</div><div class="di-value">${fmtTime(perf.ttfb)}</div></div>
+        <div class="detail-item"><div class="di-label">Page Size</div><div class="di-value">${perf.page_size_kb ? perf.page_size_kb.toFixed(1) + ' KB' : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">CDN</div><div class="di-value">${perf.cdn && perf.cdn.detected ? `<span class="badge badge-good">${esc(perf.cdn.name || 'Yes')}</span>` : '<span class="badge badge-muted">No</span>'}</div></div>
+        <div class="detail-item"><div class="di-label">Render-Blocking</div><div class="di-value">${perf.render_blocking ? perf.render_blocking.count : '—'}</div></div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="detail-section">
+      <div class="detail-section-title"> Security</div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="di-label">Score</div><div class="di-value" style="color:${scoreColor(sec.security_score)}">${sec.security_score !== undefined ? Math.round(sec.security_score) : '—'}</div></div>
+        <div class="detail-item"><div class="di-label">HTTPS</div><div class="di-value">${sec.https && sec.https.is_https ? '<span class="badge badge-good"> Yes</span>' : '<span class="badge badge-bad">No</span>'}</div></div>
+        <div class="detail-item"><div class="di-label">SSL</div><div class="di-value">${sec.ssl && sec.ssl.valid ? '<span class="badge badge-good"> Valid</span>' : '<span class="badge badge-bad">Invalid</span>'}</div></div>
+        <div class="detail-item"><div class="di-label">Header Coverage</div><div class="di-value" style="color:${scoreColor(sec.headers && sec.headers.coverage_percent)}">${sec.headers ? sec.headers.coverage_percent + '%' : '—'}</div></div>
+      </div>
+      ${secHeaderRows ? `<div style="margin-top:0.75rem;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem"><thead><tr><th style="text-align:left;padding:0.4rem 0.5rem;color:var(--muted);border-bottom:1px solid var(--border)">Header</th><th style="padding:0.4rem 0.5rem;color:var(--muted);border-bottom:1px solid var(--border)">Present</th></tr></thead><tbody>${secHeaderRows}</tbody></table></div>` : ''}
+    </div>
+
+    <!-- Alerts -->
+    <div class="detail-section">
+      <div class="detail-section-title"> All Alerts (${allAlerts.length})</div>
+      ${alertsHtml}
+    </div>`;
+    }
+
+    //  INIT 
+    loadHistory();
+  </script>
+</body>
+
+</html>

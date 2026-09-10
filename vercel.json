@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "cd node-website-monitor/frontend && npm install && npm run build",
+  "outputDirectory": "node-website-monitor/frontend/build",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://monitor-hg6i.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
