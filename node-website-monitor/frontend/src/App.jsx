@@ -42,7 +42,7 @@ class SearchErrorBoundary extends React.Component {
 }
 
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Helper to normalize URLs for WebSocket event comparisons
 const normalizeUrlString = (u) => {
@@ -203,9 +203,9 @@ export default function App() {
         .slice(0, 5);
       const filteredMonitored = query
         ? [...safeTargets]
-            .sort((a, b) => (b.scanCount || 0) - (a.scanCount || 0))
-            .filter(t => t && urlMatches(t))
-            .slice(0, 5)
+          .sort((a, b) => (b.scanCount || 0) - (a.scanCount || 0))
+          .filter(t => t && urlMatches(t))
+          .slice(0, 5)
         : monitoredList;
 
       // 3. Recent Searches (from searchHistory, showing top 5)
@@ -258,7 +258,7 @@ export default function App() {
 
     let hostname = t.url;
     try { hostname = new URL(t.url).hostname; } catch (e) { hostname = t.url; }
-    
+
     return (
       <button
         key={`web-${t.url}-${t.isFavorite}`}
@@ -352,13 +352,13 @@ export default function App() {
   const fetchStats = async (targetUrl = url) => {
     setLoading(true);
     setError(null);
-    
+
     // Normalize .in, .org, .com links by prepending protocol schema if absent
     let formattedUrl = targetUrl.trim();
     if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
-    
+
     try {
       const response = await axios.get(`${API_BASE}/stats?url=${encodeURIComponent(formattedUrl)}`);
       setStats(response.data);
@@ -368,7 +368,7 @@ export default function App() {
       if (formattedUrl.trim()) {
         axios.post(`${API_BASE}/search-history`, { query: formattedUrl.trim() })
           .then(() => fetchSearchHistory())
-          .catch(() => {});
+          .catch(() => { });
       }
     } catch (err) {
       console.error(err);
@@ -403,15 +403,15 @@ export default function App() {
 
     // Animated scan progress steps
     const STEPS = [
-      { label: 'Scanning Website',      pct: 8  },
-      { label: 'Checking Pages',         pct: 18 },
-      { label: 'Checking SEO',           pct: 32 },
-      { label: 'Checking SSL',           pct: 45 },
-      { label: 'Checking Performance',   pct: 58 },
-      { label: 'Checking Images',        pct: 68 },
-      { label: 'Checking Links',         pct: 78 },
-      { label: 'Running Security Scan',  pct: 88 },
-      { label: 'Generating Report',      pct: 96 },
+      { label: 'Scanning Website', pct: 8 },
+      { label: 'Checking Pages', pct: 18 },
+      { label: 'Checking SEO', pct: 32 },
+      { label: 'Checking SSL', pct: 45 },
+      { label: 'Checking Performance', pct: 58 },
+      { label: 'Checking Images', pct: 68 },
+      { label: 'Checking Links', pct: 78 },
+      { label: 'Running Security Scan', pct: 88 },
+      { label: 'Generating Report', pct: 96 },
     ];
     let stepIdx = 0;
     setScanProgress({ label: STEPS[0].label, pct: STEPS[0].pct });
@@ -443,7 +443,7 @@ export default function App() {
         fetchTargets();
         axios.post(`${API_BASE}/search-history`, { query: formattedUrl.trim() })
           .then(() => fetchSearchHistory())
-          .catch(() => {});
+          .catch(() => { });
 
         setCrawlData(null);
         setCrawlLoading(true);
@@ -454,7 +454,7 @@ export default function App() {
             if (crawlResp.data.success) setCrawlData(crawlResp.data);
             console.log(`≡ƒò╖ Crawl finished in ${((performance.now() - crawlStart) / 1000).toFixed(2)}s`);
           })
-          .catch(() => {})
+          .catch(() => { })
           .finally(() => setCrawlLoading(false));
       }
     } catch (err) {
@@ -478,7 +478,7 @@ export default function App() {
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     const socketUrl = isLocalDev
       ? 'http://localhost:5000'
-      : 'https://monitor-hg6i.onrender.com';
+      : API_BASE;
     const socket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
@@ -645,63 +645,63 @@ export default function App() {
               {/* Autocomplete dropdown */}
               {showDropdown && (dropdownGroups.favorites.length > 0 || dropdownGroups.monitored.length > 0 || dropdownGroups.recent.length > 0) && (
                 <SearchErrorBoundary>
-                <div className="absolute top-full left-0 right-0 mt-1.5 z-[9999] rounded-xl border border-slate-700/80 overflow-hidden shadow-2xl bg-slate-900 sre-dropdown max-h-96 overflow-y-auto">
-                  {dropdownGroups.favorites.length > 0 && (
-                    <div>
-                      <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
-                        <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">⭐ Pinned & Favorites</span>
+                  <div className="absolute top-full left-0 right-0 mt-1.5 z-[9999] rounded-xl border border-slate-700/80 overflow-hidden shadow-2xl bg-slate-900 sre-dropdown max-h-96 overflow-y-auto">
+                    {dropdownGroups.favorites.length > 0 && (
+                      <div>
+                        <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
+                          <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">⭐ Pinned & Favorites</span>
+                        </div>
+                        {dropdownGroups.favorites.map((t, index) => {
+                          if (!t || !t.url) return null;
+                          const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'website' && f.data.url === t.url);
+                          const isSelected = flatIndex === dropdownSelectedIndex;
+                          return renderDropdownWebsiteRow(t, isSelected, flatIndex);
+                        })}
                       </div>
-                      {dropdownGroups.favorites.map((t, index) => {
-                        if (!t || !t.url) return null;
-                        const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'website' && f.data.url === t.url);
-                        const isSelected = flatIndex === dropdownSelectedIndex;
-                        return renderDropdownWebsiteRow(t, isSelected, flatIndex);
-                      })}
-                    </div>
-                  )}
-                  {dropdownGroups.monitored.length > 0 && (
-                    <div className="border-t border-slate-850/50">
-                      <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">📊 Most Scanned</span>
+                    )}
+                    {dropdownGroups.monitored.length > 0 && (
+                      <div className="border-t border-slate-850/50">
+                        <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">📊 Most Scanned</span>
+                        </div>
+                        {dropdownGroups.monitored.map((t, index) => {
+                          if (!t || !t.url) return null;
+                          const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'website' && f.data.url === t.url && f.data.isFavorite === t.isFavorite);
+                          const isSelected = flatIndex === dropdownSelectedIndex;
+                          return renderDropdownWebsiteRow(t, isSelected, flatIndex);
+                        })}
                       </div>
-                      {dropdownGroups.monitored.map((t, index) => {
-                        if (!t || !t.url) return null;
-                        const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'website' && f.data.url === t.url && f.data.isFavorite === t.isFavorite);
-                        const isSelected = flatIndex === dropdownSelectedIndex;
-                        return renderDropdownWebsiteRow(t, isSelected, flatIndex);
-                      })}
-                    </div>
-                  )}
-                  {dropdownGroups.recent.length > 0 && (
-                    <div className="border-t border-slate-850/50">
-                      <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
-                        <span className="text-[9px] font-black text-slate-450 uppercase tracking-widest">⏱️ Recent Searches</span>
+                    )}
+                    {dropdownGroups.recent.length > 0 && (
+                      <div className="border-t border-slate-850/50">
+                        <div className="px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/20 flex items-center justify-between">
+                          <span className="text-[9px] font-black text-slate-450 uppercase tracking-widest">⏱️ Recent Searches</span>
+                        </div>
+                        {dropdownGroups.recent.map((h, index) => {
+                          if (!h || !h.query) return null;
+                          const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'history' && f.data._id === h._id);
+                          const isSelected = flatIndex === dropdownSelectedIndex;
+                          let timeLabel = '';
+                          try { if (h.searchedAt) timeLabel = new Date(h.searchedAt).toLocaleTimeString(); } catch (e) { }
+                          return (
+                            <button
+                              key={`hist-${h._id || index}`}
+                              className={`w-full flex items-center gap-3 px-3.5 py-2.5 transition-colors text-left group ${isSelected ? 'bg-indigo-650/15 text-indigo-300' : 'hover:bg-slate-800/40 text-slate-350'}`}
+                              onMouseDown={(e) => { e.preventDefault(); setUrl(h.query); setShowDropdown(false); fetchStats(h.query); }}
+                              onMouseEnter={() => setDropdownSelectedIndex(flatIndex)}
+                            >
+                              <Clock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                              <span className="text-xs font-semibold truncate flex-1">{h.query}</span>
+                              <span className="text-[8px] text-slate-650 font-mono">{timeLabel}</span>
+                            </button>
+                          );
+                        })}
                       </div>
-                      {dropdownGroups.recent.map((h, index) => {
-                        if (!h || !h.query) return null;
-                        const flatIndex = dropdownGroups.flat.findIndex(f => f.type === 'history' && f.data._id === h._id);
-                        const isSelected = flatIndex === dropdownSelectedIndex;
-                        let timeLabel = '';
-                        try { if (h.searchedAt) timeLabel = new Date(h.searchedAt).toLocaleTimeString(); } catch (e) {}
-                        return (
-                          <button
-                            key={`hist-${h._id || index}`}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 transition-colors text-left group ${isSelected ? 'bg-indigo-650/15 text-indigo-300' : 'hover:bg-slate-800/40 text-slate-350'}`}
-                            onMouseDown={(e) => { e.preventDefault(); setUrl(h.query); setShowDropdown(false); fetchStats(h.query); }}
-                            onMouseEnter={() => setDropdownSelectedIndex(flatIndex)}
-                          >
-                            <Clock className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                            <span className="text-xs font-semibold truncate flex-1">{h.query}</span>
-                            <span className="text-[8px] text-slate-650 font-mono">{timeLabel}</span>
-                          </button>
-                        );
-                      })}
+                    )}
+                    <div className="px-3 py-1.5 bg-slate-950/40 border-t border-slate-800/40 text-center">
+                      <span className="text-[9px] text-slate-600 font-mono">Use ↑ ↓ Keys & Enter to Select · Star to Pin</span>
                     </div>
-                  )}
-                  <div className="px-3 py-1.5 bg-slate-950/40 border-t border-slate-800/40 text-center">
-                    <span className="text-[9px] text-slate-600 font-mono">Use ↑ ↓ Keys & Enter to Select · Star to Pin</span>
                   </div>
-                </div>
                 </SearchErrorBoundary>
               )}
             </div>
@@ -773,25 +773,24 @@ export default function App() {
           {/* Nav items */}
           <nav className="flex flex-col gap-0.5 p-3 flex-1">
             {[
-              { id: 'uptime',         label: 'Uptime & Logs',              icon: Activity },
-              { id: 'site_analysis',  label: 'Site Analysis',              icon: BarChart2 },
-              { id: 'seo',            label: 'SEO Optimization',           icon: Globe },
-              { id: 'ssl',            label: 'SSL & Security',             icon: Shield },
-              { id: 'image_analyzer', label: 'Image Optimization',         icon: ImageIcon },
-              { id: 'accessibility',  label: 'Accessibility',              icon: Eye },
-              { id: 'wordpress',      label: 'WordPress CMS',              icon: Layers },
-              { id: 'domain_expiry',  label: 'Domain Expiry',              icon: CalendarClock },
-              { id: 'email_alerts',   label: 'Email Alerts',               icon: Mail },
-              { id: 'settings',       label: 'Gmail & Alerts',             icon: Settings },
+              { id: 'uptime', label: 'Uptime & Logs', icon: Activity },
+              { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2 },
+              { id: 'seo', label: 'SEO Optimization', icon: Globe },
+              { id: 'ssl', label: 'SSL & Security', icon: Shield },
+              { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
+              { id: 'accessibility', label: 'Accessibility', icon: Eye },
+              { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
+              { id: 'domain_expiry', label: 'Domain Expiry', icon: CalendarClock },
+              { id: 'email_alerts', label: 'Email Alerts', icon: Mail },
+              { id: 'settings', label: 'Gmail & Alerts', icon: Settings },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${
-                  activeTab === id
-                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-                }`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${activeTab === id
+                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                  }`}
               >
                 <Icon className={`h-4 w-4 shrink-0 transition-colors ${activeTab === id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
                 <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">{label}</span>
@@ -807,11 +806,10 @@ export default function App() {
             {/* Admin Dashboard */}
             <button
               onClick={() => { setActiveTab(activeTab === 'admin' ? 'uptime' : 'admin'); setSidebarOpen(false); }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${
-                activeTab === 'admin'
-                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-              }`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${activeTab === 'admin'
+                ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                }`}
             >
               <ShieldCheck className={`h-4 w-4 shrink-0 transition-colors ${activeTab === 'admin' ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
               <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">
@@ -953,11 +951,10 @@ export default function App() {
                     <button
                       key={tgt.url}
                       onClick={() => { setUrl(tgt.url); fetchStats(tgt.url); }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0 ${
-                        isActive
-                          ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-md shadow-indigo-500/5'
-                          : 'bg-dark-800/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                      }`}
+                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0 ${isActive
+                        ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-md shadow-indigo-500/5'
+                        : 'bg-dark-800/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
                     >
                       <span className={`h-1.5 w-1.5 rounded-full ${tgt.isUp ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}></span>
                       <span>{tgt.url.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span>
@@ -1005,14 +1002,13 @@ export default function App() {
       {/* ── TOAST ────────────────────────────────────────────────────────── */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-[99999] animate-fade">
-          <div className={`px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border text-xs font-bold ${
-            toast.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-            toast.type === 'error'   ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
-                                       'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-          }`}>
+          <div className={`px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border text-xs font-bold ${toast.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+            toast.type === 'error' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
+              'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+            }`}>
             {toast.type === 'success' && <ShieldCheck className="h-4 w-4" />}
-            {toast.type === 'error'   && <AlertCircle className="h-4 w-4" />}
-            {toast.type === 'info'    && <BellRing className="h-4 w-4 animate-bounce" />}
+            {toast.type === 'error' && <AlertCircle className="h-4 w-4" />}
+            {toast.type === 'info' && <BellRing className="h-4 w-4 animate-bounce" />}
             <span>{toast.message}</span>
           </div>
         </div>
@@ -1021,4 +1017,3 @@ export default function App() {
     </div>
   );
 }
-   
