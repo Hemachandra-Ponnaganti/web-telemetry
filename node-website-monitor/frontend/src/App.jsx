@@ -168,9 +168,14 @@ export default function App() {
   const fetchTargets = async () => {
     try {
       const response = await axios.get(`${API_BASE}/targets`);
-      setTargets(response.data);
+      if (Array.isArray(response.data)) {
+        setTargets(response.data);
+      } else {
+        setTargets([]);
+      }
     } catch (err) {
       console.error("Failed to fetch SRE audited targets:", err);
+      setTargets([]);
     }
   };
   const [error, setError] = useState(null);

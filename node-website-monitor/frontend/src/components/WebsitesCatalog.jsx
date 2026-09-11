@@ -22,7 +22,8 @@ export default function WebsitesCatalog({
   const [submittingAdd, setSubmittingAdd] = useState(false);
 
   // Filter websites based on search query and filter pills
-  const filteredTargets = targets.filter(t => {
+  const safeTargets = Array.isArray(targets) ? targets : [];
+  const filteredTargets = safeTargets.filter(t => {
     if (!t || !t.url) return false;
     const siteNameStr = typeof t.name === 'string' ? t.name : (t.name?.text || '');
     const query = searchTerm.toLowerCase().trim();
@@ -93,7 +94,7 @@ export default function WebsitesCatalog({
               Websites Catalog
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 font-extrabold text-xs">
-              {targets.length} {targets.length === 1 ? 'Site' : 'Sites'} Monitored
+              {safeTargets.length} {safeTargets.length === 1 ? 'Site' : 'Sites'} Monitored
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
