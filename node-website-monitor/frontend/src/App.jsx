@@ -920,10 +920,46 @@ export default function App() {
                     )}
                   </div>
                 ) : (
-                  <div className="py-24 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-3xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                    <Activity className="h-10 w-10 text-slate-650 mx-auto mb-4 animate-pulse" />
-                    <h4 className="font-extrabold text-slate-400">Auditer state is empty</h4>
-                    <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Please enter a valid website URL in the topbar above and click <strong className="text-indigo-455">Run Scan</strong> to launch crawler passes.</p>
+                  <div className="py-16 px-6 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-2xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                    <Activity className="h-10 w-10 text-indigo-500 mx-auto mb-4 animate-pulse" />
+                    <h4 className="font-extrabold text-slate-300 text-lg">Auditer state is empty</h4>
+                    <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto">
+                      Enter a website URL below to launch an instant SRE audit scan, or select a site from the catalog.
+                    </p>
+
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleRunAudit(); }}
+                      className="mt-6 flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto"
+                    >
+                      <div className="bg-dark-900 border border-slate-750 focus-within:border-indigo-500 rounded-xl px-3.5 flex items-center gap-2 w-full transition-all">
+                        <Search className="text-slate-500 h-4 w-4 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Enter domain URL (e.g. wordpress.org)"
+                          value={url}
+                          onChange={(e) => setUrl(e.target.value)}
+                          className="bg-transparent border-none outline-none text-xs w-full text-slate-200 placeholder-slate-500 py-3"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={loading || auditLoading}
+                        className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-550 hover:to-indigo-450 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${auditLoading ? 'rotate-infinite' : ''}`} />
+                        <span>{auditLoading ? 'Scanning...' : 'Run Scan'}</span>
+                      </button>
+                    </form>
+
+                    <div className="mt-5 pt-4 border-t border-slate-800/60">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('grid')}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer"
+                      >
+                        ← Browse Websites Catalog
+                      </button>
+                    </div>
                   </div>
                 )}
               </GlobalErrorBoundary>
@@ -935,7 +971,7 @@ export default function App() {
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-2.5">Audited Targets (Previous Links Scan History)</span>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
               {targets.length === 0 ? (
-                <span className="text-xs text-slate-500 italic">No targets audited yet. Enter a URL above and click Run Scan.</span>
+                <span className="text-xs text-slate-500 italic">No targets audited yet. Enter a website URL above to begin scanning.</span>
               ) : (
                 targets.map((tgt) => {
                   const isActive = normalizeUrlString(url) === normalizeUrlString(tgt.url);
