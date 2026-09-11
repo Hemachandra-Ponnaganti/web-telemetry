@@ -83,7 +83,10 @@ class GlobalErrorBoundary extends React.Component {
 }
 
 
-const rawApiBase = import.meta.env.VITE_API_URL || '/api';
+const rawApiBase = import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '/api'
+    : 'https://web-telemetry-backend.onrender.com/api');
 const API_BASE = rawApiBase.replace(/\/+$/, '');
 
 // Helper to normalize URLs for WebSocket event comparisons

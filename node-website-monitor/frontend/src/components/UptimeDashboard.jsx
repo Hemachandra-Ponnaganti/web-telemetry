@@ -10,7 +10,10 @@ import SeoDashboard from './SeoDashboard';
 import SSLMonitor from './SSLMonitor';
 import AccessibilityAudit from './AccessibilityAudit';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? '/api'
+    : 'https://web-telemetry-backend.onrender.com/api');
 
 export default function UptimeDashboard({ stats, isSocketConnected, onNavigateToAlt }) {
   const [activeSubTab, setActiveSubTab] = useState('performance'); // performance, seo, ui_ux, security, history
