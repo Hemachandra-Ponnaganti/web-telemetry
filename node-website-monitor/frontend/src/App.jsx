@@ -444,7 +444,6 @@ export default function App() {
         setStats(response.data);
       } else {
         setStats(null);
-        setError('Received invalid data format from SRE backend endpoint.');
       }
       if (formattedUrl !== url) {
         setUrl(formattedUrl);
