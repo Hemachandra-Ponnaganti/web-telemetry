@@ -7,7 +7,7 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const apiRoutes = require('./routes/api');
 const { startUptimeScheduler } = require('./services/monitorService');
-const { MonitorHistory, WordPressMonitor, Alert } = require('./models/Schemas');
+const { MonitorHistory, WordPressMonitor, Alert, ScannedWebsite } = require('./models/Schemas');
 const emailService = require('./services/emailService');
 
 // Load configurations
@@ -80,6 +80,17 @@ const seedDummyData = async () => {
       }
 
       await MonitorHistory.insertMany(mockHistory);
+
+      // Seed ScannedWebsite
+      await ScannedWebsite.create({
+        url: targetUrl,
+        name: 'WordPress.org',
+        isUp: true,
+        statusCode: 200,
+        lastScannedAt: new Date(),
+        scanCount: 1,
+        isFavorite: false
+      });
 
       // Seed WordPress details
       await WordPressMonitor.create({

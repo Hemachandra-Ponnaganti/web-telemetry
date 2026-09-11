@@ -6,7 +6,8 @@ const {
   getWordPressDetails,
   getAlerts,
   resolveAlert,
-  getMonitoredTargets
+  getMonitoredTargets,
+  deleteMonitoredTarget
 } = require('../controllers/monitorController');
 const {
   getSettings,
@@ -36,6 +37,7 @@ router.get('/stats', getDashboardStats);
 
 // Unique monitored target domains list
 router.get('/targets', getMonitoredTargets);
+router.post('/targets/delete', deleteMonitoredTarget);
 
 // Wordpress details
 router.get('/wordpress', getWordPressDetails);
@@ -209,6 +211,23 @@ router.post('/scanned-websites/favorite', async (req, res) => {
     const website = await ScannedWebsite.findOneAndUpdate(
       { url },
       { isFavorite: !!isFavorite },
+      { upsert: true, new: true }
+    );
+    res.status(200).json({ success: true, website });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Update Website Performance Analysis Frequency ───────────────────────────
+router.post('/targets/frequency', async (req, res) => {
+  const { url, analysisFrequency } = req.body;
+  if (!url || !analysisFrequency) return res.status(400).json({ error: 'URL and analysisFrequency required.' });
+  try {
+    const { ScannedWebsite } = require('../models/Schemas');
+    const website = await ScannedWebsite.findOneAndUpdate(
+      { url },
+      { analysisFrequency },
       { upsert: true, new: true }
     );
     res.status(200).json({ success: true, website });

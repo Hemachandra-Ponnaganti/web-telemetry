@@ -185,6 +185,15 @@ const MonitorHistory = {
       res = res.filter(item => item.url === query.url);
     }
     return res.length;
+  },
+  deleteMany: async (query = {}) => {
+    if (isConnected()) return await RealMonitorHistory.deleteMany(query);
+    const before = inMemoryHistory.length;
+    inMemoryHistory = inMemoryHistory.filter(item => {
+      if (query.url && item.url === query.url) return false;
+      return true;
+    });
+    return { deletedCount: before - inMemoryHistory.length };
   }
 };
 
@@ -356,7 +365,8 @@ const scannedWebsiteSchema = new mongoose.Schema({
   statusCode: { type: Number },
   lastScannedAt: { type: Date, default: Date.now },
   scanCount: { type: Number, default: 1 },
-  isFavorite: { type: Boolean, default: false }
+  isFavorite: { type: Boolean, default: false },
+  analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' }
 });
 
 const RealEmailAlertHistory = mongoose.model('RealEmailAlertHistory', emailAlertHistorySchema);
@@ -453,9 +463,62 @@ const SearchHistory = {
 };
 
 const ScannedWebsite = {
-  find: async (query = {}) => {
-    if (isConnected()) return await RealScannedWebsite.find(query);
-    return inMemoryScannedWebsites;
+  create: async (data) => {
+    if (isConnected()) return await RealScannedWebsite.create(data);
+    const doc = {
+      name: '',
+      isUp: true,
+      statusCode: 200,
+      scanCount: 1,
+      isFavorite: false,
+      analysisFrequency: '1h',
+      lastScannedAt: new Date(),
+      _id: 'sw_' + Math.random().toString(36).substr(2, 9),
+      ...data
+    };
+    const idx = inMemoryScannedWebsites.findIndex(w => w.url === doc.url);
+    if (idx !== -1) {
+      inMemoryScannedWebsites[idx] = { ...inMemoryScannedWebsites[idx], ...doc };
+    } else {
+      inMemoryScannedWebsites.push(doc);
+    }
+    return doc;
+  },
+  find: (query = {}) => {
+    const isConn = isConnected();
+    const filterData = () => {
+      let res = [...inMemoryScannedWebsites];
+      if (query.url) {
+        res = res.filter(item => item.url === query.url);
+      }
+      return res;
+    };
+    return {
+      sort: (sortQuery) => ({
+        limit: async (lim) => {
+          if (isConn) return await RealScannedWebsite.find(query).sort(sortQuery).limit(lim);
+          let data = filterData();
+          if (sortQuery && (sortQuery.lastScannedAt || sortQuery.updatedAt)) {
+            const dir = (sortQuery.lastScannedAt || sortQuery.updatedAt) < 0 ? -1 : 1;
+            data.sort((a, b) => dir * (new Date(b.lastScannedAt || 0) - new Date(a.lastScannedAt || 0)));
+          }
+          return data.slice(0, lim);
+        },
+        then: async (resolve) => {
+          if (isConn) return resolve(await RealScannedWebsite.find(query).sort(sortQuery));
+          let data = filterData();
+          if (sortQuery && (sortQuery.lastScannedAt || sortQuery.updatedAt)) {
+            const dir = (sortQuery.lastScannedAt || sortQuery.updatedAt) < 0 ? -1 : 1;
+            data.sort((a, b) => dir * (new Date(b.lastScannedAt || 0) - new Date(a.lastScannedAt || 0)));
+          }
+          return resolve(data);
+        }
+      }),
+      then: async (resolve) => {
+        if (isConn) return resolve(await RealScannedWebsite.find(query));
+        return resolve(filterData());
+      }
+    };
   },
   findOne: async (query = {}) => {
     if (isConnected()) return await RealScannedWebsite.findOne(query);
@@ -484,11 +547,17 @@ const ScannedWebsite = {
         }
         delete initialFields.$inc;
       }
-      const doc = { url: query.url, name: '', isUp: true, statusCode: 200, scanCount: 1, isFavorite: false, lastScannedAt: new Date(), _id: 'sw_' + Math.random().toString(36).substr(2, 9), ...initialFields };
+      const doc = { url: query.url, name: '', isUp: true, statusCode: 200, scanCount: 1, isFavorite: false, analysisFrequency: '1h', lastScannedAt: new Date(), _id: 'sw_' + Math.random().toString(36).substr(2, 9), ...initialFields };
       inMemoryScannedWebsites.push(doc);
       return doc;
     }
     return null;
+  },
+  deleteOne: async (query = {}) => {
+    if (isConnected()) return await RealScannedWebsite.deleteOne(query);
+    const before = inMemoryScannedWebsites.length;
+    inMemoryScannedWebsites = inMemoryScannedWebsites.filter(w => w.url !== query.url);
+    return { deletedCount: before - inMemoryScannedWebsites.length };
   }
 };
 

@@ -17,6 +17,7 @@ import ImageOptimization from './components/ImageOptimization';
 import ImageOptimizationAnalyzer from './components/ImageOptimizationAnalyzer';
 import AdminLogin from './components/AdminLogin';
 import DomainExpiryDashboard from './components/DomainExpiryDashboard';
+import WebsitesCatalog from './components/WebsitesCatalog';
 
 // ── Error Boundary — catches render errors in dropdown/child components
 // without blanking the entire page ──────────────────────────────────────────
@@ -99,9 +100,41 @@ export default function App() {
   const [crawlData, setCrawlData] = useState(null);
   const [crawlLoading, setCrawlLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState(null);
-  // Tracks whether the very first data fetch has ever completed — prevents
-  // the blank "Auditer state is empty" flash between loading=false and stats arriving.
   const [initializing, setInitializing] = useState(true);
+
+  // View state: 'grid' (Websites catalog page) vs 'detail' (Full website SRE tracking page)
+  const [viewMode, setViewMode] = useState('grid');
+
+  const handleSelectWebsite = (siteUrl) => {
+    setUrl(siteUrl);
+    fetchStats(siteUrl);
+    setViewMode('detail');
+    setActiveTab('uptime');
+  };
+
+  const handleAddWebsite = async (newUrl, analysisFrequency = '1h') => {
+    let formattedUrl = newUrl.trim();
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+    setUrl(formattedUrl);
+    await handleRunAudit(formattedUrl, analysisFrequency);
+    setViewMode('detail');
+    setActiveTab('uptime');
+  };
+
+  const handleDeleteWebsite = async (siteUrl) => {
+    try {
+      await axios.post(`${API_BASE}/targets/delete`, { url: siteUrl });
+      showToast(`Removed ${siteUrl} from catalog.`, 'info');
+      fetchTargets();
+      if (normalizeUrlString(url) === normalizeUrlString(siteUrl)) {
+        setViewMode('grid');
+      }
+    } catch (err) {
+      showToast('Failed to delete website from catalog.', 'error');
+    }
+  };
 
   // ── NEW: Search autocomplete state ──────────────────────────────────────────
   const [showDropdown, setShowDropdown] = useState(false);
@@ -316,7 +349,7 @@ export default function App() {
         <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${t.isUp ? 'bg-emerald-450' : 'bg-rose-500'}`} />
         <div className="flex-1 min-w-0">
           <p className={`text-xs font-bold truncate transition-colors ${isSelected ? 'text-indigo-300' : 'text-slate-200 group-hover:text-indigo-400'}`}>
-            {t.name || hostname}
+            {typeof t.name === 'string' ? t.name : (t.name?.text || hostname)}
           </p>
           <p className="text-[8px] text-slate-500 font-mono truncate">{t.url}</p>
         </div>
@@ -422,23 +455,24 @@ export default function App() {
   };
 
   // Trigger an immediate, concurrent SRE audit run
-  const handleRunAudit = async () => {
-    if (!url) {
+  const handleRunAudit = async (overrideUrl, analysisFrequency) => {
+    const target = overrideUrl || url;
+    if (!target) {
       showToast('Please specify a valid website URL', 'error');
       return;
     }
 
-    let formattedUrl = url.trim();
+    let formattedUrl = target.trim();
     if (!/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
 
     setAuditLoading(true);
 
-    // ΓöÇΓöÇ Scan performance logging ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // ── Scan performance logging ──────────────────────────────────────────
     const scanStart = performance.now();
-    console.group(`≡ƒöì SRE Scan Performance ΓÇö ${formattedUrl}`);
-    console.log(`Γû╢ Scan Started: ${new Date().toISOString()}`);
+    console.group(`🔍 SRE Scan Performance — ${formattedUrl}`);
+    console.log(`▶ Scan Started: ${new Date().toISOString()}`);
     console.log(`  Target: ${formattedUrl}`);
 
     // Animated scan progress steps
@@ -459,11 +493,11 @@ export default function App() {
       stepIdx = Math.min(stepIdx + 1, STEPS.length - 1);
       setScanProgress({ label: STEPS[stepIdx].label, pct: STEPS[stepIdx].pct });
       const elapsed = ((performance.now() - scanStart) / 1000).toFixed(2);
-      console.log(`  ΓÅ▒ [${elapsed}s] ${STEPS[stepIdx].label}...`);
+      console.log(`  ⏱ [${elapsed}s] ${STEPS[stepIdx].label}...`);
     }, 900);
 
     try {
-      const response = await axios.post(`${API_BASE}/audit`, { url: formattedUrl });
+      const response = await axios.post(`${API_BASE}/audit`, { url: formattedUrl, analysisFrequency });
       clearInterval(stepTimer);
       setScanProgress({ label: 'Scan Complete!', pct: 100 });
 
@@ -781,99 +815,116 @@ export default function App() {
       <div className="flex relative z-10" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
         {/* ── MOBILE OVERLAY ── */}
-        {sidebarOpen && (
+        {viewMode !== 'grid' && sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/60 z-40 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
-        {/* ── LEFT SIDEBAR ──────────────────────────────────────────────── */}
-        <aside className={`
-          fixed md:sticky top-16 z-40 md:z-auto
-          h-[calc(100vh-64px)] md:h-[calc(100vh-64px)]
-          w-56 shrink-0
-          bg-dark-800/95 md:bg-dark-800/60
-          backdrop-blur-md
-          border-r border-slate-800/60
-          flex flex-col
-          transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          overflow-y-auto
-        `}>
+        {/* ── LEFT SIDEBAR (Only visible when viewing site detail telemetry) ── */}
+        {viewMode !== 'grid' && (
+          <aside className={`
+            fixed top-16 left-0 z-30
+            h-[calc(100vh-64px)]
+            w-56 shrink-0
+            bg-dark-800/95 md:bg-dark-800/80
+            backdrop-blur-md
+            border-r border-slate-800/60
+            flex flex-col
+            transition-transform duration-300 ease-in-out
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+            overflow-y-auto
+          `}>
 
-          {/* Mobile close button */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/60 md:hidden">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navigation</span>
-            <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-slate-200 transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+            {/* Mobile close button */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/60 md:hidden">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Navigation</span>
+              <button onClick={() => setSidebarOpen(false)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          {/* Nav items */}
-          <nav className="flex flex-col gap-0.5 p-3 flex-1">
-            {[
-              { id: 'uptime', label: 'Uptime & Logs', icon: Activity },
-              { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2 },
-              { id: 'seo', label: 'SEO Optimization', icon: Globe },
-              { id: 'ssl', label: 'SSL & Security', icon: Shield },
-              { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
-              { id: 'accessibility', label: 'Accessibility', icon: Eye },
-              { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
-              { id: 'domain_expiry', label: 'Domain Expiry', icon: CalendarClock },
-              { id: 'email_alerts', label: 'Email Alerts', icon: Mail },
-              { id: 'settings', label: 'Gmail & Alerts', icon: Settings },
-            ].map(({ id, label, icon: Icon }) => (
+            {/* Nav items */}
+            <nav className="flex flex-col gap-0.5 p-3 flex-1">
+              {/* Catalog Page Launcher */}
               <button
-                key={id}
-                onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${activeTab === id
+                onClick={() => { setViewMode('grid'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full mb-2 ${
+                  viewMode === 'grid'
+                    ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-extrabold shadow-lg shadow-indigo-600/30'
+                    : 'text-slate-200 bg-dark-900/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <Globe className={`h-4 w-4 shrink-0 ${viewMode === 'grid' ? 'text-white' : 'text-indigo-400'}`} />
+                <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">Websites Catalog</span>
+              </button>
+
+              <div className="my-1 border-t border-slate-800/60" />
+
+              {[
+                { id: 'uptime', label: 'Uptime & Logs', icon: Activity },
+                { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2 },
+                { id: 'seo', label: 'SEO Optimization', icon: Globe },
+                { id: 'ssl', label: 'SSL & Security', icon: Shield },
+                { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
+                { id: 'accessibility', label: 'Accessibility', icon: Eye },
+                { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
+                { id: 'domain_expiry', label: 'Domain Expiry', icon: CalendarClock },
+                { id: 'email_alerts', label: 'Email Alerts', icon: Mail },
+                { id: 'settings', label: 'Gmail & Alerts', icon: Settings },
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => { setViewMode('detail'); setActiveTab(id); setSidebarOpen(false); }}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${viewMode === 'detail' && activeTab === id
+                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                    }`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 transition-colors ${viewMode === 'detail' && activeTab === id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                  <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">{label}</span>
+                  {viewMode === 'detail' && activeTab === id && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
+                  )}
+                </button>
+              ))}
+
+              {/* Divider */}
+              <div className="my-2 border-t border-slate-800/60" />
+
+              {/* Admin Dashboard */}
+              <button
+                onClick={() => { setViewMode('detail'); setActiveTab(activeTab === 'admin' ? 'uptime' : 'admin'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${viewMode === 'detail' && activeTab === 'admin'
                   ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
                   }`}
               >
-                <Icon className={`h-4 w-4 shrink-0 transition-colors ${activeTab === id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">{label}</span>
-                {activeTab === id && (
+                <ShieldCheck className={`h-4 w-4 shrink-0 transition-colors ${viewMode === 'detail' && activeTab === 'admin' ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">
+                  {activeTab === 'admin' ? '← Back' : 'Admin Dashboard'}
+                </span>
+                {viewMode === 'detail' && activeTab === 'admin' && (
                   <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
                 )}
               </button>
-            ))}
+            </nav>
 
-            {/* Divider */}
-            <div className="my-2 border-t border-slate-800/60" />
-
-            {/* Admin Dashboard */}
-            <button
-              onClick={() => { setActiveTab(activeTab === 'admin' ? 'uptime' : 'admin'); setSidebarOpen(false); }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${activeTab === 'admin'
-                ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-                }`}
-            >
-              <ShieldCheck className={`h-4 w-4 shrink-0 transition-colors ${activeTab === 'admin' ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-              <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">
-                {activeTab === 'admin' ? '← Back' : 'Admin Dashboard'}
-              </span>
-              {activeTab === 'admin' && (
-                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
-              )}
-            </button>
-          </nav>
-
-          {/* Socket status indicator at bottom of sidebar */}
-          <div className="px-4 py-3 border-t border-slate-800/60 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isSocketConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                {isSocketConnected ? 'Live WebSocket' : 'Polling Mode'}
-              </span>
+            {/* Socket status indicator at bottom of sidebar */}
+            <div className="px-4 py-3 border-t border-slate-800/60 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isSocketConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                  {isSocketConnected ? 'Live WebSocket' : 'Polling Mode'}
+                </span>
+              </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
         {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
-        <main className="flex-1 min-w-0 px-4 md:px-6 py-8 pb-12">
+        <main className={`flex-1 min-w-0 px-4 md:px-6 py-8 pb-12 ${viewMode !== 'grid' ? 'md:ml-56' : ''}`}>
 
           {error && (
             <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 text-sm animate-fade-in-up">
@@ -882,103 +933,130 @@ export default function App() {
             </div>
           )}
 
-          {/* Audit Target Status Header */}
-          {stats && (
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 glass-card p-6 rounded-2xl animate-fade-in-up">
-              <div>
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">AUDIT TARGET SOURCE</span>
-                <h2 className="text-xl font-extrabold text-slate-200 tracking-tight">{stats.url}</h2>
+          {/* 1. WEBSITES GRID CATALOG VIEW */}
+          {viewMode === 'grid' ? (
+            <WebsitesCatalog
+              targets={targets}
+              onSelectWebsite={handleSelectWebsite}
+              onAddWebsite={handleAddWebsite}
+              onDeleteWebsite={handleDeleteWebsite}
+              onToggleFavorite={toggleFavorite}
+              onRefreshTargets={fetchTargets}
+              isScanning={auditLoading}
+            />
+          ) : (
+            /* 2. FULL TRACKING DETAIL DASHBOARD VIEW */
+            <div className="space-y-6">
+              {/* Back to Catalog bar */}
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-600 border border-slate-800 hover:border-indigo-500 text-slate-300 hover:text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm group"
+                >
+                  <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                  <span>Back to Websites Catalog</span>
+                </button>
               </div>
-              <div className="flex gap-6">
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">Core Status</span>
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.latestStatus?.isUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}`}>
-                    {stats.latestStatus?.isUp ? 'ACTIVE' : 'DOWN'}
-                  </span>
+
+              {/* Audit Target Status Header */}
+              {stats && (
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 glass-card p-6 rounded-2xl animate-fade-in-up">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">AUDIT TARGET SOURCE</span>
+                    <h2 className="text-xl font-extrabold text-slate-200 tracking-tight">{stats.url}</h2>
+                  </div>
+                  <div className="flex gap-6">
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">Core Status</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.latestStatus?.isUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}`}>
+                        {stats.latestStatus?.isUp ? 'ACTIVE' : 'DOWN'}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">WordPress Core</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
+                        {stats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">WordPress Core</span>
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
-                    {stats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
-                  </span>
-                </div>
-              </div>
+              )}
+
+              <GlobalErrorBoundary resetKey={url} onReset={() => fetchStats(url)}>
+                {/* Dynamic tab content panel — protected by GlobalErrorBoundary */}
+                {activeTab === 'admin' ? (
+                  isAuthenticated ? (
+                    <AdminDashboard adminName={adminUser} loginTime={loginTime} onLogout={handleLogout} />
+                  ) : (
+                    <AdminLogin onLoginSuccess={handleLoginSuccess} onCancel={() => setActiveTab('uptime')} />
+                  )
+                ) : activeTab === 'settings' ? (
+                  <SettingsPanel showToast={showToast} />
+                ) : activeTab === 'email_alerts' ? (
+                  <EmailAlertSettings siteUrl={stats?.url || url} showToast={showToast} />
+                ) : activeTab === 'domain_expiry' ? (
+                  <DomainExpiryDashboard isDark={isDark} />
+                ) : (loading && !stats) || initializing ? (
+                  <div className="py-24 text-center animate-fade-in-up">
+                    <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
+                    <h4 className="font-extrabold text-slate-300">Synchronizing SRE monitoring telemetry...</h4>
+                    <p className="text-xs text-slate-500 mt-1">Fetching local histories and alert logs from MongoDB</p>
+                  </div>
+                ) : stats ? (
+                  <div className="space-y-8">
+                    {activeTab === 'uptime' && (
+                      <UptimeDashboard stats={stats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
+                    )}
+                    {activeTab === 'wordpress' && (
+                      <WordPressDashboard wordpressData={stats.wordpress} />
+                    )}
+                    {activeTab === 'ssl' && (
+                      <SSLMonitor sslData={stats?.sslData} securityData={stats?.securityData} />
+                    )}
+                    {activeTab === 'seo' && (
+                      <SeoDashboard seoData={stats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
+                    )}
+                    {activeTab === 'accessibility' && (
+                      <AccessibilityAudit
+                        uiUxData={stats?.uiUxData}
+                        mobileFriendliness={stats?.seoData?.mobileFriendliness}
+                      />
+                    )}
+                    {activeTab === 'site_analysis' && (
+                      <SiteAnalysisDashboard
+                        pageAnalysisData={stats?.pageAnalysisData}
+                        seoData={stats?.seoData}
+                        activeAlerts={stats?.activeAlerts}
+                        crawlData={crawlData}
+                        crawlLoading={crawlLoading}
+                        altHighlight={siteAnalysisAltHighlight}
+                      />
+                    )}
+                    {activeTab === 'image_analyzer' && (
+                      <ImageOptimizationAnalyzer
+                        stats={stats}
+                        crawlData={crawlData}
+                        url={stats?.url || stats?.latestStatus?.url || url}
+                        isDark={isDark}
+                      />
+                    )}
+                    {activeTab === 'malware' && (
+                      <MalwareReport malwareData={stats?.malwareData} />
+                    )}
+                    {activeTab === 'images' && (
+                      <ImageOptimization seoData={stats?.seoData} crawlData={crawlData} />
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-24 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-3xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                    <Activity className="h-10 w-10 text-slate-650 mx-auto mb-4 animate-pulse" />
+                    <h4 className="font-extrabold text-slate-400">Auditer state is empty</h4>
+                    <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Please enter a valid website URL in the topbar above and click <strong className="text-indigo-455">Run Scan</strong> to launch crawler passes.</p>
+                  </div>
+                )}
+              </GlobalErrorBoundary>
             </div>
           )}
-
-          <GlobalErrorBoundary resetKey={url} onReset={() => fetchStats(url)}>
-            {/* Dynamic tab content panel — protected by GlobalErrorBoundary */}
-            {activeTab === 'admin' ? (
-              isAuthenticated ? (
-                <AdminDashboard adminName={adminUser} loginTime={loginTime} onLogout={handleLogout} />
-              ) : (
-                <AdminLogin onLoginSuccess={handleLoginSuccess} onCancel={() => setActiveTab('uptime')} />
-              )
-            ) : activeTab === 'settings' ? (
-              <SettingsPanel showToast={showToast} />
-            ) : activeTab === 'email_alerts' ? (
-              <EmailAlertSettings siteUrl={stats?.url || url} showToast={showToast} />
-            ) : activeTab === 'domain_expiry' ? (
-              <DomainExpiryDashboard isDark={isDark} />
-            ) : (loading && !stats) || initializing ? (
-              <div className="py-24 text-center animate-fade-in-up">
-                <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
-                <h4 className="font-extrabold text-slate-300">Synchronizing SRE monitoring telemetry...</h4>
-                <p className="text-xs text-slate-500 mt-1">Fetching local histories and alert logs from MongoDB</p>
-              </div>
-            ) : stats ? (
-              <div className="space-y-8">
-                {activeTab === 'uptime' && (
-                  <UptimeDashboard stats={stats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
-                )}
-                {activeTab === 'wordpress' && (
-                  <WordPressDashboard wordpressData={stats.wordpress} />
-                )}
-                {activeTab === 'ssl' && (
-                  <SSLMonitor sslData={stats?.sslData} securityData={stats?.securityData} />
-                )}
-                {activeTab === 'seo' && (
-                  <SeoDashboard seoData={stats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
-                )}
-                {activeTab === 'accessibility' && (
-                  <AccessibilityAudit
-                    uiUxData={stats?.uiUxData}
-                    mobileFriendliness={stats?.seoData?.mobileFriendliness}
-                  />
-                )}
-                {activeTab === 'site_analysis' && (
-                  <SiteAnalysisDashboard
-                    pageAnalysisData={stats?.pageAnalysisData}
-                    seoData={stats?.seoData}
-                    activeAlerts={stats?.activeAlerts}
-                    crawlData={crawlData}
-                    crawlLoading={crawlLoading}
-                    altHighlight={siteAnalysisAltHighlight}
-                  />
-                )}
-                {activeTab === 'image_analyzer' && (
-                  <ImageOptimizationAnalyzer
-                    stats={stats}
-                    crawlData={crawlData}
-                    url={stats?.url || stats?.latestStatus?.url || url}
-                    isDark={isDark}
-                  />
-                )}
-                {activeTab === 'malware' && (
-                  <MalwareReport malwareData={stats?.malwareData} />
-                )}
-                {activeTab === 'images' && (
-                  <ImageOptimization seoData={stats?.seoData} crawlData={crawlData} />
-                )}
-              </div>
-            ) : (
-              <div className="py-24 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-3xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                <Activity className="h-10 w-10 text-slate-650 mx-auto mb-4 animate-pulse" />
-                <h4 className="font-extrabold text-slate-400">Auditer state is empty</h4>
-                <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Please enter a valid website URL in the topbar above and click <strong className="text-indigo-455">Run Scan</strong> to launch crawler passes.</p>
-              </div>
-            )}
-          </GlobalErrorBoundary>
 
           {/* Targets Switcher Pill Bar */}
           <div className="mt-12 pt-6 border-t border-slate-800/80 animate-fade-in-up">

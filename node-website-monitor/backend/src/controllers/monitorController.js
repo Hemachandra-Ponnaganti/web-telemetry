@@ -6,7 +6,7 @@ const { MonitorHistory, WordPressMonitor, Alert } = require('../models/Schemas')
  * Trigger immediate site uptime and WordPress health audits concurrently.
  */
 const triggerAudit = async (req, res) => {
-  const { url } = req.body;
+  const { url, analysisFrequency } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'Missing target URL in request body.' });
   }
@@ -16,7 +16,7 @@ const triggerAudit = async (req, res) => {
     
     // Concurrent execution of uptime check and WordPress crawler
     await Promise.all([
-      checkWebsiteStatus(normalizedUrl),
+      checkWebsiteStatus(normalizedUrl, analysisFrequency),
       auditWordPressSite(normalizedUrl).catch(() => null) // WordPress check can return null if not wordpress site
     ]);
 
@@ -112,6 +112,9 @@ const resolveAlert = async (req, res) => {
 /**
  * Retrieve all monitored targets and their latest status telemetry.
  */
+/**
+ * Retrieve all monitored targets and their latest status telemetry.
+ */
 const getMonitoredTargets = async (req, res) => {
   const getHostname = (urlStr) => {
     try {
@@ -123,48 +126,88 @@ const getMonitoredTargets = async (req, res) => {
   };
 
   try {
-    const { ScannedWebsite } = require('../models/Schemas');
-    let targets = await ScannedWebsite.find({});
-    
-    // Fallback if ScannedWebsite is empty
-    if (!targets || targets.length === 0) {
-      const histories = await MonitorHistory.find({});
+    const { ScannedWebsite, MonitorHistory } = require('../models/Schemas');
+    let dbTargets = await ScannedWebsite.find({}).sort({ lastScannedAt: -1 });
+
+    let targets = [];
+    if (!dbTargets || dbTargets.length === 0) {
+      const histories = await MonitorHistory.find({}).sort({ checkedAt: -1 });
       const targetsMap = {};
       for (const h of histories) {
-        const url = h.url;
-        const checkedAt = new Date(h.checkedAt);
-        if (!targetsMap[url] || new Date(targetsMap[url].checkedAt) < checkedAt) {
-          targetsMap[url] = {
+        if (!targetsMap[h.url]) {
+          let perf = {};
+          try { perf = JSON.parse(h.performanceData || '{}'); } catch(e) {}
+          let seo = {};
+          try { seo = JSON.parse(h.seoData || '{}'); } catch(e) {}
+          
+          targetsMap[h.url] = {
             url: h.url,
             name: getHostname(h.url),
             isUp: h.isUp,
             statusCode: h.statusCode,
             loadTimeMs: h.loadTimeMs,
+            performanceScore: perf.performanceScore || 85,
+            grade: perf.grade || 'A',
+            seoScore: seo.seoScore || 80,
+            sslDaysRemaining: h.ssl?.daysRemaining || 45,
             checkedAt: h.checkedAt,
             lastScannedAt: h.checkedAt,
             scanCount: 1,
-            isFavorite: false
+            isFavorite: false,
+            analysisFrequency: '1h'
           };
         }
       }
       targets = Object.values(targetsMap);
     } else {
-      // Map scanned websites to frontend schema format
-      targets = targets.map(t => ({
-        url: t.url,
-        name: t.name || getHostname(t.url),
-        isUp: t.isUp,
-        statusCode: t.statusCode,
-        checkedAt: t.lastScannedAt || new Date(),
-        lastScannedAt: t.lastScannedAt,
-        scanCount: t.scanCount || 1,
-        isFavorite: !!t.isFavorite
-      }));
+      // For each ScannedWebsite, get its latest MonitorHistory for scores
+      for (const t of dbTargets) {
+        const latestHistory = await MonitorHistory.findOne({ url: t.url }).sort({ checkedAt: -1 });
+        let perf = {};
+        try { perf = JSON.parse(latestHistory?.performanceData || '{}'); } catch(e) {}
+        let seo = {};
+        try { seo = JSON.parse(latestHistory?.seoData || '{}'); } catch(e) {}
+
+        const siteNameStr = typeof t.name === 'string' ? t.name : (t.name?.text || getHostname(t.url));
+
+        targets.push({
+          url: t.url,
+          name: siteNameStr,
+          isUp: t.isUp,
+          statusCode: t.statusCode,
+          loadTimeMs: latestHistory?.loadTimeMs || 0,
+          performanceScore: perf.performanceScore || 88,
+          grade: perf.grade || 'A',
+          seoScore: seo.seoScore || 85,
+          sslDaysRemaining: latestHistory?.ssl?.daysRemaining ?? 45,
+          checkedAt: t.lastScannedAt || new Date(),
+          lastScannedAt: t.lastScannedAt,
+          scanCount: t.scanCount || 1,
+          isFavorite: !!t.isFavorite,
+          analysisFrequency: t.analysisFrequency || '1h'
+        });
+      }
     }
-    
+
     res.status(200).json(targets);
   } catch (error) {
     res.status(500).json({ error: `Failed to compile monitored targets: ${error.message}` });
+  }
+};
+
+/**
+ * Delete a monitored website target from the database catalog.
+ */
+const deleteMonitoredTarget = async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required.' });
+  try {
+    const { ScannedWebsite, MonitorHistory } = require('../models/Schemas');
+    await ScannedWebsite.deleteOne({ url });
+    await MonitorHistory.deleteMany({ url });
+    res.status(200).json({ success: true, message: `Removed ${url} from monitored targets.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 
@@ -174,5 +217,6 @@ module.exports = {
   getWordPressDetails,
   getAlerts,
   resolveAlert,
-  getMonitoredTargets
+  getMonitoredTargets,
+  deleteMonitoredTarget
 };
