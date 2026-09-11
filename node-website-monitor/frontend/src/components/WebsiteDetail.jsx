@@ -10,7 +10,7 @@ import {
   Activity, Clock, ExternalLink, Info
 } from 'lucide-react';
 
-const API_BASE = '/api';
+import { API_BASE } from '../apiConfig';
 
 const score = (s) => {
   if (s === null || s === undefined) return { color: 'text-slate-400', bg: 'bg-slate-800/60 border-slate-700' };

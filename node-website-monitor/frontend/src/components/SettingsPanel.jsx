@@ -9,7 +9,7 @@ import {
   ToggleLeft, ToggleRight, Sparkles, RefreshCw, Send, CheckCircle2
 } from 'lucide-react';
 
-const API_BASE = '/api';
+import { API_BASE } from '../apiConfig';
 
 export default function SettingsPanel({ showToast }) {
   const [settings, setSettings] = useState({

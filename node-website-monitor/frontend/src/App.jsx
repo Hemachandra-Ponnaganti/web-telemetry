@@ -83,11 +83,7 @@ class GlobalErrorBoundary extends React.Component {
 }
 
 
-const rawApiBase = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? '/api'
-    : 'https://web-telemetry-backend.onrender.com/api');
-const API_BASE = rawApiBase.replace(/\/+$/, '');
+import { API_BASE, SOCKET_URL } from './apiConfig';
 
 // Helper to normalize URLs for WebSocket event comparisons
 const normalizeUrlString = (u) => {
@@ -559,12 +555,7 @@ export default function App() {
     setInitializing(false);
 
     // Establish Socket.io connection to backend SRE Gateway
-    const isLocalDev = typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const socketUrl = isLocalDev
-      ? 'http://localhost:5000'
-      : (API_BASE.startsWith('http') ? API_BASE : window.location.origin);
-    const socket = io(socketUrl, {
+    const socket = io(SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : ''), {
       transports: ['websocket', 'polling']
     });
 
