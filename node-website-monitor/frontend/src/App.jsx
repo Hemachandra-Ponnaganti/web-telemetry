@@ -83,7 +83,8 @@ class GlobalErrorBoundary extends React.Component {
 }
 
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const rawApiBase = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = rawApiBase.replace(/\/+$/, '');
 
 // Helper to normalize URLs for WebSocket event comparisons
 const normalizeUrlString = (u) => {
