@@ -478,7 +478,7 @@ export default function App() {
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     const socketUrl = isLocalDev
       ? 'http://localhost:5000'
-      : API_BASE;
+      : (API_BASE.startsWith('http') ? API_BASE : window.location.origin);
     const socket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });

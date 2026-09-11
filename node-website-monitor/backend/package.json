@@ -4,6 +4,7 @@
   "description": "Node.js + Express website uptime and WordPress monitoring SRE backend",
   "main": "src/app.js",
   "scripts": {
+    "build": "node -e \"const { execSync, cpSync } = require('child_process'); execSync('npm install', { cwd: '../frontend', stdio: 'inherit' }); execSync('npm run build', { cwd: '../frontend', stdio: 'inherit' }); cpSync('../frontend/build', './src/public', { recursive: true });\"",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js"
   },
