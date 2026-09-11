@@ -555,8 +555,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchStats();
     fetchTargets();
+    setInitializing(false);
 
     // Establish Socket.io connection to backend SRE Gateway
     const isLocalDev = typeof window !== 'undefined' &&
