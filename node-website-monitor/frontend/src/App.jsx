@@ -435,8 +435,8 @@ export default function App() {
     setLoading(true);
     setError(null);
 
-    // Normalize .in, .org, .com links by prepending protocol schema if absent
-    let formattedUrl = targetUrl.trim();
+    const rawTarget = typeof targetUrl === 'string' ? targetUrl : url;
+    let formattedUrl = (typeof rawTarget === 'string' ? rawTarget : '').trim();
     if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
@@ -461,21 +461,19 @@ export default function App() {
       setError('Failed to fetch dashboard SRE metrics. Please check network connectivity or Vercel serverless function logs.');
     } finally {
       setLoading(false);
-      // Mark initialization as complete after the very first fetch attempt
-      // (success or failure) so we never show the blank empty state during startup.
       setInitializing(false);
     }
   };
 
   // Trigger an immediate, concurrent SRE audit run
   const handleRunAudit = async (overrideUrl, analysisFrequency) => {
-    const target = overrideUrl || url;
-    if (!target) {
+    const rawTarget = typeof overrideUrl === 'string' ? overrideUrl : url;
+    if (!rawTarget || typeof rawTarget !== 'string' || !rawTarget.trim()) {
       showToast('Please specify a valid website URL', 'error');
       return;
     }
 
-    let formattedUrl = target.trim();
+    let formattedUrl = rawTarget.trim();
     if (!/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
