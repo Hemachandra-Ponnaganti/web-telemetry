@@ -435,7 +435,12 @@ export default function App() {
 
     try {
       const response = await axios.get(`${API_BASE}/stats?url=${encodeURIComponent(formattedUrl)}`);
-      setStats(response.data);
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        setStats(response.data);
+      } else {
+        setStats(null);
+        setError('Received invalid data format from SRE backend endpoint.');
+      }
       if (formattedUrl !== url) {
         setUrl(formattedUrl);
       }
@@ -615,13 +620,14 @@ export default function App() {
   }, []);
 
   // Map/align backend schema variables to the custom props structure requested by user
-  if (stats) {
-    if (!stats.sslData) stats.sslData = stats.latestStatus?.ssl;
-    if (!stats.securityData) stats.securityData = stats.latestStatus?.security;
-    if (!stats.seoData) stats.seoData = stats.latestStatus?.seo;
-    if (!stats.uiUxData) stats.uiUxData = stats.latestStatus?.uiUx;
-    if (!stats.pageAnalysisData) stats.pageAnalysisData = stats.latestStatus?.pageAnalysis;
-    if (!stats.malwareData) stats.malwareData = stats.latestStatus?.malware;
+  let safeStats = (stats && typeof stats === 'object' && !Array.isArray(stats)) ? stats : null;
+  if (safeStats) {
+    if (!safeStats.sslData) safeStats.sslData = safeStats.latestStatus?.ssl;
+    if (!safeStats.securityData) safeStats.securityData = safeStats.latestStatus?.security;
+    if (!safeStats.seoData) safeStats.seoData = safeStats.latestStatus?.seo;
+    if (!safeStats.uiUxData) safeStats.uiUxData = safeStats.latestStatus?.uiUx;
+    if (!safeStats.pageAnalysisData) safeStats.pageAnalysisData = safeStats.latestStatus?.pageAnalysis;
+    if (!safeStats.malwareData) safeStats.malwareData = safeStats.latestStatus?.malware;
   }
 
   return (
@@ -960,23 +966,23 @@ export default function App() {
               </div>
 
               {/* Audit Target Status Header */}
-              {stats && (
+              {safeStats && (
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 glass-card p-6 rounded-2xl animate-fade-in-up">
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">AUDIT TARGET SOURCE</span>
-                    <h2 className="text-xl font-extrabold text-slate-200 tracking-tight">{stats.url}</h2>
+                    <h2 className="text-xl font-extrabold text-slate-200 tracking-tight">{safeStats.url}</h2>
                   </div>
                   <div className="flex gap-6">
                     <div className="text-right">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">Core Status</span>
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.latestStatus?.isUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}`}>
-                        {stats.latestStatus?.isUp ? 'ACTIVE' : 'DOWN'}
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${safeStats.latestStatus?.isUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}`}>
+                        {safeStats.latestStatus?.isUp ? 'ACTIVE' : 'DOWN'}
                       </span>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">WordPress Core</span>
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${stats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
-                        {stats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${safeStats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
+                        {safeStats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
                       </span>
                     </div>
                   </div>
@@ -994,40 +1000,40 @@ export default function App() {
                 ) : activeTab === 'settings' ? (
                   <SettingsPanel showToast={showToast} />
                 ) : activeTab === 'email_alerts' ? (
-                  <EmailAlertSettings siteUrl={stats?.url || url} showToast={showToast} />
+                  <EmailAlertSettings siteUrl={safeStats?.url || url} showToast={showToast} />
                 ) : activeTab === 'domain_expiry' ? (
                   <DomainExpiryDashboard isDark={isDark} />
-                ) : (loading && !stats) || initializing ? (
+                ) : (loading && !safeStats) || initializing ? (
                   <div className="py-24 text-center animate-fade-in-up">
                     <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
                     <h4 className="font-extrabold text-slate-300">Synchronizing SRE monitoring telemetry...</h4>
                     <p className="text-xs text-slate-500 mt-1">Fetching local histories and alert logs from MongoDB</p>
                   </div>
-                ) : stats ? (
+                ) : safeStats ? (
                   <div className="space-y-8">
                     {activeTab === 'uptime' && (
-                      <UptimeDashboard stats={stats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
+                      <UptimeDashboard stats={safeStats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
                     )}
                     {activeTab === 'wordpress' && (
-                      <WordPressDashboard wordpressData={stats.wordpress} />
+                      <WordPressDashboard wordpressData={safeStats.wordpress} />
                     )}
                     {activeTab === 'ssl' && (
-                      <SSLMonitor sslData={stats?.sslData} securityData={stats?.securityData} />
+                      <SSLMonitor sslData={safeStats?.sslData} securityData={safeStats?.securityData} />
                     )}
                     {activeTab === 'seo' && (
-                      <SeoDashboard seoData={stats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
+                      <SeoDashboard seoData={safeStats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
                     )}
                     {activeTab === 'accessibility' && (
                       <AccessibilityAudit
-                        uiUxData={stats?.uiUxData}
-                        mobileFriendliness={stats?.seoData?.mobileFriendliness}
+                        uiUxData={safeStats?.uiUxData}
+                        mobileFriendliness={safeStats?.seoData?.mobileFriendliness}
                       />
                     )}
                     {activeTab === 'site_analysis' && (
                       <SiteAnalysisDashboard
-                        pageAnalysisData={stats?.pageAnalysisData}
-                        seoData={stats?.seoData}
-                        activeAlerts={stats?.activeAlerts}
+                        pageAnalysisData={safeStats?.pageAnalysisData}
+                        seoData={safeStats?.seoData}
+                        activeAlerts={safeStats?.activeAlerts}
                         crawlData={crawlData}
                         crawlLoading={crawlLoading}
                         altHighlight={siteAnalysisAltHighlight}
@@ -1035,17 +1041,17 @@ export default function App() {
                     )}
                     {activeTab === 'image_analyzer' && (
                       <ImageOptimizationAnalyzer
-                        stats={stats}
+                        stats={safeStats}
                         crawlData={crawlData}
-                        url={stats?.url || stats?.latestStatus?.url || url}
+                        url={safeStats?.url || safeStats?.latestStatus?.url || url}
                         isDark={isDark}
                       />
                     )}
                     {activeTab === 'malware' && (
-                      <MalwareReport malwareData={stats?.malwareData} />
+                      <MalwareReport malwareData={safeStats?.malwareData} />
                     )}
                     {activeTab === 'images' && (
-                      <ImageOptimization seoData={stats?.seoData} crawlData={crawlData} />
+                      <ImageOptimization seoData={safeStats?.seoData} crawlData={crawlData} />
                     )}
                   </div>
                 ) : (
