@@ -33,9 +33,49 @@ class SearchErrorBoundary extends React.Component {
   }
   render() {
     if (this.state.hasError) {
-      // Reset on next render attempt so it doesn't stay broken
       this.state.hasError = false;
       return null;
+    }
+    return this.props.children;
+  }
+}
+
+class GlobalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[GLOBAL ERROR BOUNDARY]', error, info);
+  }
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="py-20 text-center glass-card border border-amber-500/30 rounded-3xl max-w-xl mx-auto my-8 p-8 animate-fade-in-up">
+          <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-4 animate-bounce" />
+          <h4 className="font-extrabold text-slate-200 text-base">Auditer Telemetry Notice</h4>
+          <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto">
+            Unable to render complete metrics for this target domain. Click below to reset or run a fresh audit scan.
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onReset) this.props.onReset();
+            }}
+            className="mt-5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-550 hover:to-indigo-450 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/20"
+          >
+            Reset Dashboard
+          </button>
+        </div>
+      );
     }
     return this.props.children;
   }
@@ -866,77 +906,79 @@ export default function App() {
             </div>
           )}
 
-          {/* Dynamic tab content panel — identical logic, zero changes */}
-          {activeTab === 'admin' ? (
-            isAuthenticated ? (
-              <AdminDashboard adminName={adminUser} loginTime={loginTime} onLogout={handleLogout} />
+          <GlobalErrorBoundary resetKey={url} onReset={() => fetchStats(url)}>
+            {/* Dynamic tab content panel — protected by GlobalErrorBoundary */}
+            {activeTab === 'admin' ? (
+              isAuthenticated ? (
+                <AdminDashboard adminName={adminUser} loginTime={loginTime} onLogout={handleLogout} />
+              ) : (
+                <AdminLogin onLoginSuccess={handleLoginSuccess} onCancel={() => setActiveTab('uptime')} />
+              )
+            ) : activeTab === 'settings' ? (
+              <SettingsPanel showToast={showToast} />
+            ) : activeTab === 'email_alerts' ? (
+              <EmailAlertSettings siteUrl={stats?.url || url} showToast={showToast} />
+            ) : activeTab === 'domain_expiry' ? (
+              <DomainExpiryDashboard isDark={isDark} />
+            ) : (loading && !stats) || initializing ? (
+              <div className="py-24 text-center animate-fade-in-up">
+                <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
+                <h4 className="font-extrabold text-slate-300">Synchronizing SRE monitoring telemetry...</h4>
+                <p className="text-xs text-slate-500 mt-1">Fetching local histories and alert logs from MongoDB</p>
+              </div>
+            ) : stats ? (
+              <div className="space-y-8">
+                {activeTab === 'uptime' && (
+                  <UptimeDashboard stats={stats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
+                )}
+                {activeTab === 'wordpress' && (
+                  <WordPressDashboard wordpressData={stats.wordpress} />
+                )}
+                {activeTab === 'ssl' && (
+                  <SSLMonitor sslData={stats?.sslData} securityData={stats?.securityData} />
+                )}
+                {activeTab === 'seo' && (
+                  <SeoDashboard seoData={stats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
+                )}
+                {activeTab === 'accessibility' && (
+                  <AccessibilityAudit
+                    uiUxData={stats?.uiUxData}
+                    mobileFriendliness={stats?.seoData?.mobileFriendliness}
+                  />
+                )}
+                {activeTab === 'site_analysis' && (
+                  <SiteAnalysisDashboard
+                    pageAnalysisData={stats?.pageAnalysisData}
+                    seoData={stats?.seoData}
+                    activeAlerts={stats?.activeAlerts}
+                    crawlData={crawlData}
+                    crawlLoading={crawlLoading}
+                    altHighlight={siteAnalysisAltHighlight}
+                  />
+                )}
+                {activeTab === 'image_analyzer' && (
+                  <ImageOptimizationAnalyzer
+                    stats={stats}
+                    crawlData={crawlData}
+                    url={stats?.url || stats?.latestStatus?.url || url}
+                    isDark={isDark}
+                  />
+                )}
+                {activeTab === 'malware' && (
+                  <MalwareReport malwareData={stats?.malwareData} />
+                )}
+                {activeTab === 'images' && (
+                  <ImageOptimization seoData={stats?.seoData} crawlData={crawlData} />
+                )}
+              </div>
             ) : (
-              <AdminLogin onLoginSuccess={handleLoginSuccess} onCancel={() => setActiveTab('uptime')} />
-            )
-          ) : activeTab === 'settings' ? (
-            <SettingsPanel showToast={showToast} />
-          ) : activeTab === 'email_alerts' ? (
-            <EmailAlertSettings siteUrl={stats?.url || url} showToast={showToast} />
-          ) : activeTab === 'domain_expiry' ? (
-            <DomainExpiryDashboard isDark={isDark} />
-          ) : (loading && !stats) || initializing ? (
-            <div className="py-24 text-center animate-fade-in-up">
-              <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
-              <h4 className="font-extrabold text-slate-300">Synchronizing SRE monitoring telemetry...</h4>
-              <p className="text-xs text-slate-500 mt-1">Fetching local histories and alert logs from MongoDB</p>
-            </div>
-          ) : stats ? (
-            <div className="space-y-8">
-              {activeTab === 'uptime' && (
-                <UptimeDashboard stats={stats} isSocketConnected={isSocketConnected} onNavigateToAlt={handleNavigateToAlt} />
-              )}
-              {activeTab === 'wordpress' && (
-                <WordPressDashboard wordpressData={stats.wordpress} />
-              )}
-              {activeTab === 'ssl' && (
-                <SSLMonitor sslData={stats?.sslData} securityData={stats?.securityData} />
-              )}
-              {activeTab === 'seo' && (
-                <SeoDashboard seoData={stats?.seoData} crawlData={crawlData} onNavigateToAlt={handleNavigateToAlt} />
-              )}
-              {activeTab === 'accessibility' && (
-                <AccessibilityAudit
-                  uiUxData={stats?.uiUxData}
-                  mobileFriendliness={stats?.seoData?.mobileFriendliness}
-                />
-              )}
-              {activeTab === 'site_analysis' && (
-                <SiteAnalysisDashboard
-                  pageAnalysisData={stats?.pageAnalysisData}
-                  seoData={stats?.seoData}
-                  activeAlerts={stats?.activeAlerts}
-                  crawlData={crawlData}
-                  crawlLoading={crawlLoading}
-                  altHighlight={siteAnalysisAltHighlight}
-                />
-              )}
-              {activeTab === 'image_analyzer' && (
-                <ImageOptimizationAnalyzer
-                  stats={stats}
-                  crawlData={crawlData}
-                  url={stats?.url || stats?.latestStatus?.url || url}
-                  isDark={isDark}
-                />
-              )}
-              {activeTab === 'malware' && (
-                <MalwareReport malwareData={stats?.malwareData} />
-              )}
-              {activeTab === 'images' && (
-                <ImageOptimization seoData={stats?.seoData} crawlData={crawlData} />
-              )}
-            </div>
-          ) : (
-            <div className="py-24 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-3xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-              <Activity className="h-10 w-10 text-slate-650 mx-auto mb-4 animate-pulse" />
-              <h4 className="font-extrabold text-slate-400">Auditer state is empty</h4>
-              <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Please enter a valid website URL in the topbar above and click <strong className="text-indigo-455">Run Scan</strong> to launch crawler passes.</p>
-            </div>
-          )}
+              <div className="py-24 text-center glass-card border-dashed border-slate-800 rounded-3xl max-w-3xl mx-auto my-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                <Activity className="h-10 w-10 text-slate-650 mx-auto mb-4 animate-pulse" />
+                <h4 className="font-extrabold text-slate-400">Auditer state is empty</h4>
+                <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto">Please enter a valid website URL in the topbar above and click <strong className="text-indigo-455">Run Scan</strong> to launch crawler passes.</p>
+              </div>
+            )}
+          </GlobalErrorBoundary>
 
           {/* Targets Switcher Pill Bar */}
           <div className="mt-12 pt-6 border-t border-slate-800/80 animate-fade-in-up">
