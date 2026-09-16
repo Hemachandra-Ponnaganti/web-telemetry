@@ -32,6 +32,38 @@ router.post('/crawl', async (req, res) => {
   }
 });
 
+// On-Demand High-Accuracy Website Malware Scan
+router.post('/malware-scan', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'Missing target URL in request body.' });
+  try {
+    const { runDeepMalwareScan } = require('../services/malwareService');
+    const { ScannedWebsite } = require('../models/Schemas');
+
+    const result = await runDeepMalwareScan(url);
+
+    // Save/update malware data for this scanned website if it exists
+    if (url) {
+      try {
+        await ScannedWebsite.findOneAndUpdate(
+          { url },
+          {
+            malwareStatus: result.status,
+            malwareFindings: (result.findings || []).length,
+            malwareScore: result.score,
+            updatedAt: new Date()
+          },
+          { upsert: false }
+        );
+      } catch (dbErr) {}
+    }
+
+    res.status(200).json({ success: true, malwareData: result });
+  } catch (err) {
+    res.status(500).json({ error: `Malware scan failed: ${err.message}` });
+  }
+});
+
 // Dashboard stats & historical graphs payload
 router.get('/stats', getDashboardStats);
 

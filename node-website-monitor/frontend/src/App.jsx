@@ -728,6 +728,7 @@ export default function App() {
                 { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2 },
                 { id: 'seo', label: 'SEO Optimization', icon: Globe },
                 { id: 'ssl', label: 'SSL & Security', icon: Shield },
+                { id: 'malware', label: 'Malware Scan', icon: ShieldAlert },
                 { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
                 { id: 'accessibility', label: 'Accessibility', icon: Eye },
                 { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
@@ -902,7 +903,11 @@ export default function App() {
                       />
                     )}
                     {activeTab === 'malware' && (
-                      <MalwareReport malwareData={safeStats?.malwareData} />
+                      <MalwareReport
+                        malwareData={safeStats?.malwareData}
+                        targetUrl={url || safeStats?.url || safeStats?.latestStatus?.url}
+                        onRescan={(newData) => setStats(prev => prev ? { ...prev, malwareData: newData } : { malwareData: newData })}
+                      />
                     )}
                     {activeTab === 'images' && (
                       <ImageOptimization seoData={safeStats?.seoData} crawlData={crawlData} />

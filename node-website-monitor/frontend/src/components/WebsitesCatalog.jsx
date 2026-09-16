@@ -281,11 +281,20 @@ export default function WebsitesCatalog({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
                         <p className="text-xs text-slate-500 font-mono truncate">{site.url}</p>
-                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-extrabold text-indigo-400">
-                          ⚡ Every {site.analysisFrequency || '1h'}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
+                            site.malwareStatus === 'malware' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
+                            site.malwareStatus === 'suspicious' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
+                            'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                          }`}>
+                            {site.malwareStatus === 'malware' ? '❌ Malware' : site.malwareStatus === 'suspicious' ? '⚠️ Suspicious' : '🛡️ Malware Clean'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-extrabold text-indigo-400">
+                            ⚡ Every {site.analysisFrequency || '1h'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 

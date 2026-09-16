@@ -530,7 +530,7 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
   // 10. Malware Detection
   let malware = { status: 'clean', statusLabel: '✅ Clean', score: 100, findings: [], summary: 'No issues detected.' };
   try {
-    malware = analyseMalware(htmlContent, url);
+    malware = analyseMalware(htmlContent, url, responseHeaders);
     if (malware.status === 'malware') {
       await Alert.create({ url, category: 'security', level: 'critical', message: `Malware Detected: ${malware.summary}` });
       await sendAlertEmailToWebsite(url, 'security', 'critical', `Malware Detected on ${url}: ${malware.summary}`);
