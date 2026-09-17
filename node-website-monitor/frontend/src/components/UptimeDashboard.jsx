@@ -693,6 +693,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
           { id: 'seo', label: 'Technical SEO' },
           { id: 'ui_ux', label: 'Visual Accessibility' },
           { id: 'security', label: 'Security Shield' },
+          { id: 'snapshot', label: 'Content Snapshot' },
           { id: 'history', label: 'Scan History & Trends' }
         ].map(sub => (
           <button
@@ -1193,6 +1194,27 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* Content Snapshot Tab */}
+        {activeSubTab === 'snapshot' && (
+          <div className="space-y-6">
+            <div className="glass-card p-6 border border-slate-800/60 rounded-xl relative overflow-hidden">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <FileText className="text-indigo-400 h-5 w-5" /> Visual Content Snapshot
+                  </h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">
+                    Raw text content extracted during the latest scan
+                  </p>
+                </div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 font-mono text-xs text-slate-300 whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+                {latestStatus?.snapshot?.text ? latestStatus.snapshot.text : 'No text content available for this snapshot.'}
+              </div>
+            </div>
           </div>
         )}
 

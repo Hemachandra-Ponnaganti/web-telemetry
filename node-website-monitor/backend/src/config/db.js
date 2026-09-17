@@ -7,7 +7,7 @@ const connectDB = async () => {
     
     // Set low timeout to fall back quickly if offline
     await mongoose.connect(connStr, {
-      serverSelectionTimeoutMS: 2000
+      serverSelectionTimeoutMS: 10000
     });
     console.log(`📡 MongoDB Connected: ${mongoose.connection.name}`);
     return true;

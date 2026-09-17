@@ -4,6 +4,8 @@ const tls = require('tls');
 const net = require('net');
 const cron = require('node-cron');
 const https = require('https');
+const crypto = require('crypto');
+const cheerio = require('cheerio');
 
 const { MonitorHistory, Alert } = require('../models/Schemas');
 const { analyzeSeo } = require('./seoService');
@@ -300,7 +302,8 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
     uiUxData: "",
     securityData: "",
     pageAnalysisData: "",
-    malwareData: ""
+    malwareData: "",
+    snapshotData: ""
   };
 
   // 1. DNS Resolution Speed Audit
@@ -571,11 +574,32 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
 
   try {
     const { ScannedWebsite } = require('../models/Schemas');
+    const oldSite = await ScannedWebsite.findOne({ url });
+    
+    const $ = cheerio.load(htmlContent);
+    $('script, style, noscript, iframe').remove();
+    const cleanText = $('body').text().replace(/\s+/g, ' ').trim();
+    let currentSnapshotHash = '';
+    if (cleanText) {
+      currentSnapshotHash = crypto.createHash('sha256').update(cleanText).digest('hex');
+      auditReport.snapshotData = JSON.stringify({ text: cleanText });
+    }
+
+    if (oldSite && oldSite.lastSnapshotHash && currentSnapshotHash && oldSite.lastSnapshotHash !== currentSnapshotHash) {
+      await Alert.create({
+        url,
+        category: 'content',
+        level: 'info',
+        message: 'Website content change detected since the last scan.'
+      });
+    }
+
     const updateData = {
       name: siteName,
       isUp: auditReport.isUp,
       statusCode: auditReport.statusCode,
       lastScannedAt: new Date(),
+      lastSnapshotHash: currentSnapshotHash,
       $inc: { scanCount: 1 }
     };
     if (analysisFrequency) {
@@ -648,6 +672,7 @@ const compileStats = async (url) => {
     doc.security = parseJsonSafe(doc.securityData);
     doc.pageAnalysis = parseJsonSafe(doc.pageAnalysisData);
     doc.malware = parseJsonSafe(doc.malwareData);
+    doc.snapshot = parseJsonSafe(doc.snapshotData);
     return doc;
   };
 

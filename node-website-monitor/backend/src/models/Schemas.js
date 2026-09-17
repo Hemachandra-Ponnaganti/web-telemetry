@@ -21,6 +21,7 @@ const monitorHistorySchema = new mongoose.Schema({
   securityData: { type: String },
   pageAnalysisData: { type: String },
   malwareData: { type: String },
+  snapshotData: { type: String },
   checkedAt: { type: Date, default: Date.now }
 }, { suppressReservedKeysWarning: true });
 
@@ -366,7 +367,8 @@ const scannedWebsiteSchema = new mongoose.Schema({
   lastScannedAt: { type: Date, default: Date.now },
   scanCount: { type: Number, default: 1 },
   isFavorite: { type: Boolean, default: false },
-  analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' }
+  analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' },
+  lastSnapshotHash: { type: String }
 });
 
 const RealEmailAlertHistory = mongoose.model('RealEmailAlertHistory', emailAlertHistorySchema);
