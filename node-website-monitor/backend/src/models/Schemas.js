@@ -1,4 +1,71 @@
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
+
+// ── Persistent Local Storage Configuration ──────────────────────────────────
+const DATA_DIR = path.join(__dirname, '../../data');
+const DATA_FILE = path.join(DATA_DIR, 'local_datastore.json');
+
+// ── In-Memory Datastore Fallback Layer ───────────────────────────────────────
+let inMemoryHistory = [];
+let inMemoryWordPress = [];
+let inMemoryAlerts = [];
+let inMemoryEmailConfig = [];
+let inMemoryEmailHistory = [];
+let inMemorySearchHistory = [];
+let inMemoryScannedWebsites = [];
+
+const loadFromDisk = () => {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        inMemoryHistory = Array.isArray(parsed.history) ? parsed.history : [];
+        inMemoryWordPress = Array.isArray(parsed.wordPress) ? parsed.wordPress : [];
+        inMemoryAlerts = Array.isArray(parsed.alerts) ? parsed.alerts : [];
+        inMemoryEmailConfig = Array.isArray(parsed.emailConfig) ? parsed.emailConfig : [];
+        inMemoryEmailHistory = Array.isArray(parsed.emailHistory) ? parsed.emailHistory : [];
+        inMemorySearchHistory = Array.isArray(parsed.searchHistory) ? parsed.searchHistory : [];
+        inMemoryScannedWebsites = Array.isArray(parsed.scannedWebsites) ? parsed.scannedWebsites : [];
+        console.log(`💾 Loaded persistent local datastore: ${inMemoryScannedWebsites.length} website(s), ${inMemoryHistory.length} history records.`);
+      }
+    }
+  } catch (err) {
+    console.warn(`⚠️ Failed to load local datastore from disk:`, err.message);
+  }
+};
+
+let saveTimeout = null;
+const saveToDisk = () => {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const dataToSave = {
+        history: inMemoryHistory.slice(0, 500),
+        wordPress: inMemoryWordPress,
+        alerts: inMemoryAlerts.slice(0, 200),
+        emailConfig: inMemoryEmailConfig,
+        emailHistory: inMemoryEmailHistory.slice(0, 100),
+        searchHistory: inMemorySearchHistory.slice(0, 100),
+        scannedWebsites: inMemoryScannedWebsites,
+        lastSavedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(dataToSave, null, 2), 'utf8');
+    } catch (err) {
+      console.warn(`⚠️ Failed to persist local datastore to disk:`, err.message);
+    }
+  }, 250);
+};
+
+// Immediately load existing data from disk upon module startup
+loadFromDisk();
 
 // ── Real Mongoose Schema Definitions ─────────────────────────────────────────
 const monitorHistorySchema = new mongoose.Schema({
@@ -106,11 +173,6 @@ const RealMonitorHistory = mongoose.model('RealMonitorHistory', monitorHistorySc
 const RealWordPressMonitor = mongoose.model('RealWordPressMonitor', wordpressMonitorSchema);
 const RealAlert = mongoose.model('RealAlert', alertSchema);
 
-// ── In-Memory Datastore Fallback Layer ───────────────────────────────────────
-let inMemoryHistory = [];
-let inMemoryWordPress = [];
-let inMemoryAlerts = [];
-
 const isConnected = () => mongoose.connection.readyState === 1;
 
 // ── 1. MonitorHistory Mock Wrapper ───────────────────────────────────────────
@@ -123,6 +185,7 @@ const MonitorHistory = {
       checkedAt: data.checkedAt || new Date() 
     };
     inMemoryHistory.unshift(log);
+    saveToDisk();
     return log;
   },
   insertMany: async (arr) => {
@@ -133,6 +196,7 @@ const MonitorHistory = {
       checkedAt: data.checkedAt || new Date()
     }));
     inMemoryHistory = [...logs, ...inMemoryHistory];
+    saveToDisk();
     return logs;
   },
   find: (query = {}) => {
@@ -194,6 +258,7 @@ const MonitorHistory = {
       if (query.url && item.url === query.url) return false;
       return true;
     });
+    saveToDisk();
     return { deletedCount: before - inMemoryHistory.length };
   }
 };
@@ -208,6 +273,7 @@ const WordPressMonitor = {
     if (isConnected()) return await RealWordPressMonitor.create(data);
     const doc = { ...data, _id: 'wp_' + Math.random().toString(36).substr(2, 9), lastChecked: new Date() };
     inMemoryWordPress.push(doc);
+    saveToDisk();
     return doc;
   },
   findOneAndUpdate: async (query, updateData, options = {}) => {
@@ -216,10 +282,12 @@ const WordPressMonitor = {
     let index = inMemoryWordPress.findIndex(wp => wp.url === query.url);
     if (index !== -1) {
       inMemoryWordPress[index] = { ...inMemoryWordPress[index], ...updateData, lastChecked: new Date() };
+      saveToDisk();
       return inMemoryWordPress[index];
     } else if (options.upsert) {
       const doc = { ...updateData, url: query.url, _id: 'wp_' + Math.random().toString(36).substr(2, 9), lastChecked: new Date() };
       inMemoryWordPress.push(doc);
+      saveToDisk();
       return doc;
     }
     return null;
@@ -228,6 +296,7 @@ const WordPressMonitor = {
     if (isConnected()) return await RealWordPressMonitor.deleteOne(query);
     const before = inMemoryWordPress.length;
     inMemoryWordPress = inMemoryWordPress.filter(wp => wp.url !== query.url);
+    saveToDisk();
     return { deletedCount: before - inMemoryWordPress.length };
   }
 };
@@ -242,10 +311,10 @@ const Alert = {
       resolved: false,
       createdAt: new Date()
     };
-    // De-duplicate mock alerts to prevent spamming the dashboard in memory
     const exists = inMemoryAlerts.some(a => a.url === data.url && a.message === data.message && !a.resolved);
     if (!exists) {
       inMemoryAlerts.unshift(alert);
+      saveToDisk();
     }
     return alert;
   },
@@ -280,6 +349,7 @@ const Alert = {
     let index = inMemoryAlerts.findIndex(a => a._id === id);
     if (index !== -1) {
       inMemoryAlerts[index] = { ...inMemoryAlerts[index], ...updateData };
+      saveToDisk();
       return inMemoryAlerts[index];
     }
     return null;
@@ -292,13 +362,12 @@ const Alert = {
       if (query.category && a.category !== query.category) return true;
       return false;
     });
+    saveToDisk();
     return { deletedCount: before - inMemoryAlerts.length };
   }
 };
 
 // ── 4. WebsiteEmailConfig ────────────────────────────────────────────────────
-// Stores per-website alert email configuration
-
 const websiteEmailConfigSchema = new mongoose.Schema({
   url:              { type: String, required: true, unique: true },
   alertEmail:       { type: String, default: '' },
@@ -311,7 +380,6 @@ const websiteEmailConfigSchema = new mongoose.Schema({
 });
 
 const RealWebsiteEmailConfig = mongoose.model('RealWebsiteEmailConfig', websiteEmailConfigSchema);
-let inMemoryEmailConfig = [];
 
 const WebsiteEmailConfig = {
   findOne: async (query = {}) => {
@@ -323,10 +391,12 @@ const WebsiteEmailConfig = {
     let index = inMemoryEmailConfig.findIndex(c => c.url === query.url);
     if (index !== -1) {
       inMemoryEmailConfig[index] = { ...inMemoryEmailConfig[index], ...updateData, updatedAt: new Date() };
+      saveToDisk();
       return inMemoryEmailConfig[index];
     } else if (options.upsert) {
       const doc = { url: query.url, alertEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
       inMemoryEmailConfig.push(doc);
+      saveToDisk();
       return doc;
     }
     return null;
@@ -338,13 +408,11 @@ const WebsiteEmailConfig = {
 };
 
 // ── 5. EmailAlertHistory ─────────────────────────────────────────────────────
-// Stores every email alert sent for audit / admin dashboard display
-
 const emailAlertHistorySchema = new mongoose.Schema({
   url:         { type: String, required: true },
   alertEmail:  { type: String, required: true },
-  alertType:   { type: String, required: true },   // e.g. 'uptime', 'ssl', 'seo'
-  level:       { type: String, required: true },   // 'info' | 'warning' | 'critical'
+  alertType:   { type: String, required: true },
+  level:       { type: String, required: true },
   subject:     { type: String, required: true },
   message:     { type: String, required: true },
   status:      { type: String, enum: ['sending', 'delivered', 'failed', 'bounced'], default: 'sending' },
@@ -375,15 +443,12 @@ const RealEmailAlertHistory = mongoose.model('RealEmailAlertHistory', emailAlert
 const RealSearchHistory = mongoose.model('RealSearchHistory', searchHistorySchema);
 const RealScannedWebsite = mongoose.model('RealScannedWebsite', scannedWebsiteSchema);
 
-let inMemoryEmailHistory = [];
-let inMemorySearchHistory = [];
-let inMemoryScannedWebsites = [];
-
 const EmailAlertHistory = {
   create: async (data) => {
     if (isConnected()) return await RealEmailAlertHistory.create(data);
     const doc = { ...data, _id: 'emailhist_' + Math.random().toString(36).substr(2, 9), sentAt: data.sentAt || new Date(), status: data.status || 'sending' };
     inMemoryEmailHistory.unshift(doc);
+    saveToDisk();
     return doc;
   },
   find: (query = {}) => {
@@ -428,6 +493,7 @@ const EmailAlertHistory = {
     });
     if (index !== -1) {
       inMemoryEmailHistory[index] = { ...inMemoryEmailHistory[index], ...updateData };
+      saveToDisk();
       return inMemoryEmailHistory[index];
     }
     return null;
@@ -445,6 +511,7 @@ const SearchHistory = {
     if (isConnected()) return await RealSearchHistory.create(data);
     const doc = { ...data, _id: 'sh_' + Math.random().toString(36).substr(2, 9), searchedAt: new Date() };
     inMemorySearchHistory.unshift(doc);
+    saveToDisk();
     return doc;
   },
   find: (query = {}) => {
@@ -484,6 +551,7 @@ const ScannedWebsite = {
     } else {
       inMemoryScannedWebsites.push(doc);
     }
+    saveToDisk();
     return doc;
   },
   find: (query = {}) => {
@@ -539,6 +607,7 @@ const ScannedWebsite = {
         delete updatedFields.$inc;
       }
       inMemoryScannedWebsites[index] = { ...inMemoryScannedWebsites[index], ...updatedFields, lastScannedAt: new Date() };
+      saveToDisk();
       return inMemoryScannedWebsites[index];
     } else if (options.upsert) {
       let initialFields = { ...updateData };
@@ -551,6 +620,7 @@ const ScannedWebsite = {
       }
       const doc = { url: query.url, name: '', isUp: true, statusCode: 200, scanCount: 1, isFavorite: false, analysisFrequency: '1h', lastScannedAt: new Date(), _id: 'sw_' + Math.random().toString(36).substr(2, 9), ...initialFields };
       inMemoryScannedWebsites.push(doc);
+      saveToDisk();
       return doc;
     }
     return null;
@@ -559,6 +629,7 @@ const ScannedWebsite = {
     if (isConnected()) return await RealScannedWebsite.deleteOne(query);
     const before = inMemoryScannedWebsites.length;
     inMemoryScannedWebsites = inMemoryScannedWebsites.filter(w => w.url !== query.url);
+    saveToDisk();
     return { deletedCount: before - inMemoryScannedWebsites.length };
   }
 };
