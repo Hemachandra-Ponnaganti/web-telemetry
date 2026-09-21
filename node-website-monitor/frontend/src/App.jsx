@@ -710,7 +710,7 @@ export default function App() {
             <nav className="flex flex-col gap-0.5 p-3 flex-1">
               {/* Catalog Page Launcher */}
               <button
-                onClick={() => { setViewMode('grid'); setSidebarOpen(false); }}
+                onClick={() => { setViewMode('grid'); setSidebarOpen(false); fetchTargets(); }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full mb-2 ${
                   viewMode === 'grid'
                     ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white font-extrabold shadow-lg shadow-indigo-600/30'
@@ -812,7 +812,7 @@ export default function App() {
               {/* Back to Catalog bar */}
               <div className="flex justify-between items-center">
                 <button
-                  onClick={() => setViewMode('grid')}
+                  onClick={() => { setViewMode('grid'); fetchTargets(); }}
                   className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-600 border border-slate-800 hover:border-indigo-500 text-slate-300 hover:text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm group"
                 >
                   <span className="group-hover:-translate-x-1 transition-transform">←</span>

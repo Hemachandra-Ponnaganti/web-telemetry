@@ -558,8 +558,11 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
   // Extract a friendly page title from SEO results or raw HTML markup
   let pageTitle = '';
   try {
-    pageTitle = seo?.title || seo?.metaTitle || htmlContent.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
-    pageTitle = pageTitle.trim();
+    const rawTitle = (typeof seo?.title === 'object' ? seo.title?.text : seo?.title) 
+      || (typeof seo?.metaTitle === 'object' ? seo.metaTitle?.text : seo?.metaTitle) 
+      || (typeof htmlContent === 'string' ? htmlContent.match(/<title>([^<]+)<\/title>/i)?.[1] : '') 
+      || '';
+    pageTitle = typeof rawTitle === 'string' ? rawTitle.trim() : '';
   } catch (e) {}
   
   const getHostname = (urlStr) => {
@@ -567,10 +570,10 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       const withProtocol = urlStr.includes('://') ? urlStr : `https://${urlStr}`;
       return new URL(withProtocol).hostname;
     } catch (e) {
-      return urlStr;
+      return String(urlStr || '');
     }
   };
-  const siteName = pageTitle || getHostname(url);
+  const siteName = (typeof pageTitle === 'string' && pageTitle.trim()) ? pageTitle.trim() : getHostname(url);
 
   try {
     const { ScannedWebsite } = require('../models/Schemas');
