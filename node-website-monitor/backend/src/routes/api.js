@@ -32,6 +32,96 @@ router.post('/crawl', async (req, res) => {
   }
 });
 
+// Technical SEO: On-Demand URL Quality & Architecture Scoring (Single URL)
+router.post('/seo/url-quality', (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'Missing target URL in request body.' });
+  try {
+    const { evaluateUrlQuality } = require('../services/seoService');
+    const quality = evaluateUrlQuality(url);
+    res.status(200).json({ success: true, urlQuality: quality });
+  } catch (err) {
+    res.status(500).json({ error: `URL evaluation failed: ${err.message}` });
+  }
+});
+
+// Technical SEO: Full Multi-Page Site-Wide URL Quality Audit
+router.post('/seo/site-url-audit', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'Missing target URL in request body.' });
+  try {
+    const { crawlWebsite } = require('../services/pageAnalysisService');
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const result = await crawlWebsite(normalizedUrl, '');
+    res.status(200).json({
+      success: true,
+      siteWideUrlQuality: result.siteWideUrlQuality,
+      duplicateUrls: result.duplicateUrls,
+      pageCount: result.pageCount,
+      crawlMeta: result.crawlMeta
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Site URL audit failed: ${err.message}` });
+  }
+});
+
+// Technical SEO: On-Demand Duplicate URL & Canonical Conflict Detection
+router.post('/seo/duplicate-urls', async (req, res) => {
+  const { url, pages } = req.body;
+  if (!url && (!pages || !Array.isArray(pages) || pages.length === 0)) {
+    return res.status(400).json({ error: 'Missing target URL or pages array in request body.' });
+  }
+  try {
+    const { detectDuplicateUrls } = require('../services/seoService');
+    if (pages && Array.isArray(pages) && pages.length > 0) {
+      const result = detectDuplicateUrls(pages, url || '');
+      return res.status(200).json({ success: true, duplicateUrls: result });
+    }
+
+    // Crawl target website to extract all pages and test for duplicates
+    const { crawlWebsite } = require('../services/pageAnalysisService');
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const crawlResult = await crawlWebsite(normalizedUrl, '');
+    const duplicateResult = detectDuplicateUrls(crawlResult.siteWideImages?.perPage || [], normalizedUrl);
+
+    res.status(200).json({
+      success: true,
+      duplicateUrls: duplicateResult,
+      totalCrawledPages: (crawlResult.siteWideImages?.perPage || []).length
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Duplicate URL detection failed: ${err.message}` });
+  }
+});
+
+// Technical SEO: On-Demand Orphan Pages & Internal Link Architecture Audit
+router.post('/seo/orphan-pages', async (req, res) => {
+  const { url, pages, sitemapUrls } = req.body;
+  if (!url && (!pages || !Array.isArray(pages) || pages.length === 0)) {
+    return res.status(400).json({ error: 'Missing target URL or pages array in request body.' });
+  }
+  try {
+    const { detectOrphanPages } = require('../services/seoService');
+    if (pages && Array.isArray(pages) && pages.length > 0) {
+      const result = detectOrphanPages(pages, sitemapUrls || [], url || '');
+      return res.status(200).json({ success: true, orphanPages: result });
+    }
+
+    // Crawl target website and analyze internal link graph
+    const { crawlWebsite } = require('../services/pageAnalysisService');
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const crawlResult = await crawlWebsite(normalizedUrl, '');
+
+    res.status(200).json({
+      success: true,
+      orphanPages: crawlResult.orphanPages,
+      totalCrawledPages: (crawlResult.siteWideImages?.perPage || []).length
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Orphan page audit failed: ${err.message}` });
+  }
+});
+
 // On-Demand High-Accuracy Website Malware Scan
 router.post('/malware-scan', async (req, res) => {
   const { url } = req.body;

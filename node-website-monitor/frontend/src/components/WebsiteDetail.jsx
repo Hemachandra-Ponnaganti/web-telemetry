@@ -202,11 +202,12 @@ export default function WebsiteDetail({ url, onClose }) {
 
                 {/* Coverage bars */}
                 <div className="glass-card p-5 space-y-3">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Coverage Analysis</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Coverage &amp; Structure Analysis</p>
                   {[
                     { label: 'Meta Description Coverage', value: descPct,  sub: seo.metaDescription?.text ? `${seo.metaDescription.text.length} chars` : 'Missing' },
                     { label: 'Title Tag Coverage',        value: titlePct, sub: seo.title?.text ? `${seo.title.text.length} chars` : 'Missing' },
                     { label: 'Image ALT Tag Coverage',    value: altPct,   sub: `${imgWithAlt}/${imgTotal} images` },
+                    ...(seo.urlQuality ? [{ label: 'URL Quality Architecture', value: seo.urlQuality.score || 95, sub: `Grade ${seo.urlQuality.grade || 'A'} (${seo.urlQuality.rating || 'Excellent'})` }] : []),
                   ].map(bar => (
                     <div key={bar.label}>
                       <div className="flex justify-between text-[10px] text-slate-400 mb-1">

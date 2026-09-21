@@ -15,6 +15,7 @@
 
 const axios  = require('axios');
 const https  = require('https');
+const { evaluateUrlQuality, detectDuplicateUrls, detectOrphanPages } = require('./seoService');
 
 // ── Tuning constants ──────────────────────────────────────────────────────────
 const MAX_PAGES       = 100;   // hard cap on pages crawled
@@ -196,6 +197,7 @@ const seedFromSitemap = async (origin, hostname) => {
  * @returns {Promise<object>}  site_structure payload + per-page breakdown.
  */
 const crawlWebsite = async (startUrl, homepageHtml = '') => {
+  const safeHomepageHtml = typeof homepageHtml === 'string' ? homepageHtml : '';
   const startTime = Date.now();
   const parsed    = new URL(startUrl);
   const hostname  = parsed.hostname;
@@ -209,6 +211,7 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
 
   // All images across the site, keyed by src for deduplication
   const imageMap = new Map(); // src -> { altStatus, alt, isLazyLoaded, foundOnPage, appearsOnPages }
+  const inboundLinkMap = new Map(); // targetUrl -> Set<sourceUrl>
 
   // ── Seed from sitemap ──
   const sitemapUrls = await seedFromSitemap(origin, hostname);
@@ -235,8 +238,8 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       // Fetch HTML — reuse homepage HTML if this is the start URL
       let html = '';
       const isHomepage = pageUrl === normStart || pageUrl === normStart + '/';
-      if (isHomepage && homepageHtml) {
-        html = homepageHtml;
+      if (isHomepage && safeHomepageHtml) {
+        html = safeHomepageHtml;
       } else {
         try {
           const resp = await httpClient.get(pageUrl, { timeout: PAGE_TIMEOUT_MS });
@@ -284,11 +287,15 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       const pageTitle   = titleMatch ? titleMatch[1].trim().substring(0, 120) : '';
       const pageDesc    = descMatch  ? descMatch[1].trim().substring(0, 200)  : '';
 
+      const urlQuality = evaluateUrlQuality(pageUrl);
+
       pageData.push({
         pageUrl,
         pageLabel,
         pageTitle,
         pageDesc,
+        clickDepth: depth,
+        urlQuality,
         totalImages: imgs.length,
         withAlt,
         missingAlt,
@@ -299,6 +306,11 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       if (depth < MAX_DEPTH && pageData.length < MAX_PAGES) {
         const links = extractInternalLinks(html, pageUrl, hostname);
         for (const link of links) {
+          if (!inboundLinkMap.has(link)) {
+            inboundLinkMap.set(link, new Set());
+          }
+          inboundLinkMap.get(link).add(pageUrl);
+
           if (!visited.has(link) && pageData.length + queue.length < MAX_PAGES) {
             visited.add(link);
             queue.push({ url: link, depth: depth + 1 });
@@ -309,6 +321,16 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
 
     await runWithConcurrency(tasks, CONCURRENCY);
   }
+
+  // ── Enrich pageData with Inbound Link Graph & Orphan metrics ──
+  pageData.forEach(p => {
+    const isRoot = p.pageUrl === normStart || p.pageUrl === normStart + '/';
+    const sources = Array.from(inboundLinkMap.get(p.pageUrl) || []);
+    p.inboundLinksCount = isRoot ? Math.max(1, sources.length) : sources.length;
+    p.inboundSources = sources.slice(0, 10);
+    p.isInSitemap = sitemapUrls.has(p.pageUrl);
+    p.isOrphan = !isRoot && p.inboundLinksCount === 0;
+  });
 
   // ── Aggregate site-wide image stats ──
   let totalImages    = 0;
@@ -337,6 +359,50 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       if (missingAltImages.length >= 100) break;
     }
   }
+
+  // ── Aggregate site-wide URL quality stats ──
+  const totalUrls = pageData.length;
+  const avgScore = totalUrls > 0 
+    ? Math.round(pageData.reduce((acc, p) => acc + (p.urlQuality?.score || 0), 0) / totalUrls) 
+    : 100;
+
+  const grades = { 'A+': 0, 'A': 0, 'B': 0, 'C': 0, 'F': 0 };
+  pageData.forEach(p => {
+    const g = p.urlQuality?.grade || 'A';
+    if (grades[g] !== undefined) grades[g]++;
+    else grades['C']++;
+  });
+
+  const issues = {
+    insecureHttp: pageData.filter(p => p.urlQuality?.metrics?.protocol?.status === 'critical').length,
+    excessiveLength: pageData.filter(p => (p.urlQuality?.parsed?.length || 0) > 75).length,
+    deepHierarchy: pageData.filter(p => (p.urlQuality?.parsed?.depth || 0) > 2).length,
+    badCasingOrSeparators: pageData.filter(p => p.urlQuality?.metrics?.casingSeparators?.status !== 'ok').length,
+    queryBloat: pageData.filter(p => (p.urlQuality?.parsed?.paramCount || 0) > 0).length,
+    legacyExtensions: pageData.filter(p => p.urlQuality?.metrics?.readability?.status !== 'ok').length,
+    characterSafety: pageData.filter(p => p.urlQuality?.metrics?.characterSafety?.status !== 'ok').length
+  };
+
+  const siteWideUrlQuality = {
+    totalUrls,
+    avgScore,
+    gradeDistribution: grades,
+    issues,
+    pages: pageData.map(p => ({
+      pageUrl: p.pageUrl,
+      pageLabel: p.pageLabel,
+      pageTitle: p.pageTitle,
+      clickDepth: p.clickDepth,
+      inboundLinksCount: p.inboundLinksCount,
+      inboundSources: p.inboundSources,
+      isOrphan: p.isOrphan,
+      isInSitemap: p.isInSitemap,
+      urlQuality: p.urlQuality
+    }))
+  };
+
+  // Detect orphan pages and internal link distribution across entire crawled domain
+  const orphanPages = detectOrphanPages(pageData, Array.from(sitemapUrls), startUrl);
 
   const crawlLimitReached = pageData.length >= MAX_PAGES;
   const elapsedMs = Date.now() - startTime;
@@ -368,6 +434,9 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       missingAltImages,
       perPage:           pageData,
     },
+    siteWideUrlQuality,
+    duplicateUrls: detectDuplicateUrls(pageData, startUrl),
+    orphanPages,
     crawlMeta: {
       pagesDiscovered:   visited.size,
       pagesCrawled:      pageData.length,
