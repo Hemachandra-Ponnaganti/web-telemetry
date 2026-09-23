@@ -10,7 +10,7 @@ import {
   BarChart3, PieChart, Info, HelpCircle, Download, CheckCheck,
   ListChecks, CheckSquare, Layers2, GitFork, Split, Files,
   ArrowRightLeft, Shield, AlertOctagon, CopyCheck,
-  Unlink, Network, Waypoints, CornerDownRight, Share2
+  Unlink, Network, Waypoints, CornerDownRight, Share2, Code2
 } from 'lucide-react';
 
 /**
@@ -752,6 +752,7 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
 
   const title = safeSeoData.title || { text: '', status: 'warning', message: 'No title tag detected.' };
   const metaDescription = safeSeoData.metaDescription || { text: '', status: 'warning', message: 'No description tag detected.' };
+  const keywordsMeta = safeSeoData.keywordsMeta || { text: 'No keywords found', status: 'warning', message: 'No meta keywords tag detected.' };
   const headings = {
     h1: Array.isArray(safeSeoData.headings?.h1) ? safeSeoData.headings.h1 : [],
     h2: Array.isArray(safeSeoData.headings?.h2) ? safeSeoData.headings.h2 : [],
@@ -761,6 +762,7 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
   const canonical = safeSeoData.canonical || { text: '', status: 'ok', message: '' };
   const robotsTxt = safeSeoData.robotsTxt || { exists: false, status: 'warning', message: 'Robots.txt check skipped.' };
   const sitemap = safeSeoData.sitemap || { exists: false, status: 'warning', message: 'Sitemap check skipped.' };
+  const schemaMarkup = safeSeoData.schemaMarkup || { present: false, valid: false, types: [], items: [], message: 'No Schema markup detected.' };
   const openGraph = safeSeoData.openGraph || { ogTitle: '', ogImage: '', status: 'warning' };
   const twitterCard = safeSeoData.twitterCard || { twitterCard: '', status: 'warning' };
   const indexability = safeSeoData.indexability || { isIndexable: true, status: 'ok', message: 'Site is indexable.' };
@@ -1426,10 +1428,10 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Pages</span>
           <div className="mt-2">
             <h2 className="text-2xl font-black tracking-tight text-indigo-400">
-              {crawlData?.pageCount?.estimatedPages || crawlData?.site_structure?.total_pages || '—'}
+              {crawlData?.pageCount?.estimatedPages || crawlData?.site_structure?.total_pages || safeSeoData?.siteWideUrlQuality?.totalUrls || '—'}
             </h2>
             <p className="text-[10px] mt-1 font-bold text-slate-500">
-              {crawlData ? 'BFS crawled' : 'Run scan to count'}
+              {crawlData ? 'BFS crawled' : (safeSeoData?.siteWideUrlQuality?.totalUrls ? 'Discovered links' : 'Run scan to count')}
             </p>
           </div>
         </div>
@@ -1490,16 +1492,21 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
           </h3>
           <div className="space-y-3">
             {links.brokenLinks.map((bl, idx) => (
-              <div key={idx} className="p-4 bg-rose-500/5 border border-rose-500/15 rounded-xl space-y-2">
+              <div key={idx} className={`p-4 border rounded-xl space-y-2 ${bl.isRedirect ? 'bg-amber-500/5 border-amber-500/15' : 'bg-rose-500/5 border-rose-500/15'}`}>
                 <div className="flex items-start gap-2">
-                  <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider shrink-0 mt-0.5">{bl.type}</span>
-                  <p className="font-mono text-[10px] text-rose-300 break-all">{bl.url}</p>
+                  <span className={`text-[9px] font-black uppercase tracking-wider shrink-0 mt-0.5 ${bl.isRedirect ? 'text-amber-400' : 'text-rose-400'}`}>{bl.type} {bl.isRedirect ? 'Redirect' : ''}</span>
+                  <p className={`font-mono text-[10px] break-all ${bl.isRedirect ? 'text-amber-300' : 'text-rose-300'}`}>{bl.url}</p>
                 </div>
-                <p className="text-[10px] text-slate-400">Reason: <span className="text-rose-300 font-bold">{bl.reason}</span></p>
+                <p className="text-[10px] text-slate-400">Reason: <span className={`font-bold ${bl.isRedirect ? 'text-amber-300' : 'text-rose-300'}`}>{bl.reason}</span></p>
+                {bl.foundOn && (
+                  <p className="text-[10px] text-slate-400">Found on: <a href={bl.foundOn} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline font-mono break-all">{bl.foundOn}</a></p>
+                )}
                 <div className="pt-2 border-t border-rose-500/15">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">How to Fix:</p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">{bl.isRedirect ? 'Consideration:' : 'How to Fix:'}</p>
                   <ul className="space-y-1">
-                    {bl.type === 'internal' ? (
+                    {bl.isRedirect ? (
+                      <li className="text-[10px] text-slate-400 flex items-center gap-1.5"><span className="text-amber-400">→</span> Ensure redirect chains are kept short to preserve SEO link equity.</li>
+                    ) : bl.type === 'internal' ? (
                       <>
                         <li className="text-[10px] text-slate-400 flex items-center gap-1.5"><span className="text-emerald-400">→</span> Update the link to point to the correct page URL</li>
                         <li className="text-[10px] text-slate-400 flex items-center gap-1.5"><span className="text-emerald-400">→</span> If the page was removed, set up a 301 redirect to the new URL</li>
@@ -3374,6 +3381,14 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
               </div>
               <span className="text-[10px] text-slate-500 mt-2 block">{metaDescription?.message}</span>
             </div>
+
+            <div>
+              <span className="text-slate-500 font-bold uppercase tracking-wider block text-[10px] mb-2">Meta Keywords</span>
+              <div className="p-3 bg-dark-800/30 rounded-xl border border-slate-800/60 text-slate-300 font-medium leading-relaxed break-words">
+                {keywordsMeta?.text || 'No keywords found'}
+              </div>
+              <span className="text-[10px] text-slate-500 mt-2 block">{keywordsMeta?.message}</span>
+            </div>
           </div>
         </div>
 
@@ -3408,6 +3423,42 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">{sitemap?.message}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Schema Markup Validation */}
+        <div className="col-span-12 md:col-span-6 glass-card p-6 space-y-4">
+          <h3 className="text-slate-200 font-extrabold text-sm flex items-center gap-2 border-b border-slate-800/80 pb-3">
+            <Code2 className="text-indigo-400 h-4.5 w-4.5" />
+            Schema.org Rich Snippets (JSON-LD)
+          </h3>
+          
+          <div className="space-y-4 text-xs">
+            <div>
+              <span className="text-slate-500 font-bold uppercase tracking-wider block text-[10px] mb-2">Schema Detection Status</span>
+              <div className={`p-3.5 rounded-xl border text-slate-300 font-medium ${schemaMarkup?.valid ? 'bg-emerald-950/15 border-emerald-900/25 text-emerald-300' : (schemaMarkup?.present ? 'bg-amber-950/15 border-amber-900/25 text-amber-300' : 'bg-slate-800/40 border-slate-700/50 text-slate-400')}`}>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="font-bold">{schemaMarkup?.valid ? 'Valid JSON-LD Schema Found' : (schemaMarkup?.present ? 'Schema Detected with Issues' : 'No Schema Markup')}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${schemaMarkup?.valid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : (schemaMarkup?.present ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-slate-700 text-slate-400 border border-slate-600')}`}>
+                    {schemaMarkup?.valid ? 'VALID' : (schemaMarkup?.present ? 'WARNING' : 'MISSING')}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">{schemaMarkup?.message}</p>
+                
+                {schemaMarkup?.valid && schemaMarkup?.types?.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-emerald-900/30">
+                    <span className="text-[9px] font-black uppercase text-emerald-500/70 tracking-widest block mb-2">Detected Entities</span>
+                    <div className="flex flex-wrap gap-2">
+                      {[...new Set(schemaMarkup.types)].map((type, i) => (
+                        <span key={i} className="px-2 py-1 bg-emerald-950/40 border border-emerald-500/20 rounded-md text-[10px] text-emerald-300 font-mono">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3581,12 +3632,15 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
               <span className="text-rose-455 font-bold uppercase tracking-wider block text-[9px] mb-2">Detected Broken Link Anomalies</span>
               <div className="space-y-2">
                 {(links.brokenLinks || []).map((bl, idx) => (
-                  <div key={idx} className="p-3 bg-rose-950/10 border border-rose-900/20 rounded-xl flex justify-between items-center text-xs">
+                  <div key={idx} className={`p-3 border rounded-xl flex justify-between items-center text-xs ${bl.isRedirect ? 'bg-amber-950/10 border-amber-900/20' : 'bg-rose-950/10 border-rose-900/20'}`}>
                     <div className="truncate max-w-[80%] pr-4">
-                      <span className="font-extrabold text-rose-400 uppercase tracking-widest text-[9px] block mb-0.5">{bl.type} URL Broken</span>
+                      <span className={`font-extrabold uppercase tracking-widest text-[9px] block mb-0.5 ${bl.isRedirect ? 'text-amber-400' : 'text-rose-400'}`}>{bl.type} URL {bl.isRedirect ? 'Redirect' : 'Broken'}</span>
                       <span className="font-mono text-slate-350 break-all truncate block" title={bl.url}>{bl.url}</span>
+                      {bl.foundOn && (
+                        <span className="text-[10px] text-slate-500 block mt-1">Found on: <a href={bl.foundOn} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{bl.foundOn}</a></span>
+                      )}
                     </div>
-                    <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-455 font-bold tracking-wide uppercase text-[9px] shrink-0 border border-rose-500/20">
+                    <span className={`px-2 py-0.5 rounded-md font-bold tracking-wide uppercase text-[9px] shrink-0 border ${bl.isRedirect ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-rose-500/20 text-rose-455 border-rose-500/20'}`}>
                       {bl.reason}
                     </span>
                   </div>

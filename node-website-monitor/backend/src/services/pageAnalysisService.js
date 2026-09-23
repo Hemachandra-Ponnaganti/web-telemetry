@@ -284,8 +284,11 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
       const descMatch  = html.match(/<meta\s+[^>]*name=["']description["'][^>]*content=["']([^"']*)["']/i) ||
                          html.match(/<meta\s+[^>]*content=["']([^"']*)["'][^>]*name=["']description["']/i);
+      const keywordMatch = html.match(/<meta\s+[^>]*name=["']keywords["'][^>]*content=["']([^"']*)["']/i) ||
+                           html.match(/<meta\s+[^>]*content=["']([^"']*)["'][^>]*name=["']keywords["']/i);
       const pageTitle   = titleMatch ? titleMatch[1].trim().substring(0, 120) : '';
       const pageDesc    = descMatch  ? descMatch[1].trim().substring(0, 200)  : '';
+      const pageKeywords = keywordMatch && keywordMatch[1].trim() ? keywordMatch[1].trim().substring(0, 200) : 'No keywords found';
 
       const urlQuality = evaluateUrlQuality(pageUrl);
 
@@ -294,6 +297,7 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
         pageLabel,
         pageTitle,
         pageDesc,
+        pageKeywords,
         clickDepth: depth,
         urlQuality,
         totalImages: imgs.length,
@@ -392,6 +396,7 @@ const crawlWebsite = async (startUrl, homepageHtml = '') => {
       pageUrl: p.pageUrl,
       pageLabel: p.pageLabel,
       pageTitle: p.pageTitle,
+      pageKeywords: p.pageKeywords,
       clickDepth: p.clickDepth,
       inboundLinksCount: p.inboundLinksCount,
       inboundSources: p.inboundSources,

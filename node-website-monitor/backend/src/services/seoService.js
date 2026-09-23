@@ -433,6 +433,7 @@ const analyzeSeo = async (url, htmlContent = '') => {
   const reports = {
     title: { text: "", status: "warning", message: "No meta title tag detected." },
     metaDescription: { text: "", status: "warning", message: "No meta description tag detected." },
+    keywordsMeta: { text: "", status: "warning", message: "No meta keywords tag detected." },
     headings: { h1: [], h2: [], h3: [], status: "ok", message: "Headings structure is valid." },
     canonical: { text: "", status: "ok", message: "Canonical tag verified." },
     robotsTxt: { exists: false, status: "warning", message: "Robots.txt check skipped." },
@@ -445,6 +446,7 @@ const analyzeSeo = async (url, htmlContent = '') => {
     links: { internalCount: 0, externalCount: 0, brokenCount: 0, brokenLinks: [], status: "ok" },
     imageAnalysis: { totalImages: 0, withAlt: 0, missingAlt: 0, emptyAlt: 0, missingAltSrcs: [], status: "ok", message: "No images analyzed." },
     urlQuality: urlQualityResult,
+    schemaMarkup: { present: false, valid: false, types: [], items: [], message: "No Schema markup detected." },
     seoScore: 100,
     alerts: []
   };
@@ -493,6 +495,19 @@ const analyzeSeo = async (url, htmlContent = '') => {
   } else {
     reports.seoScore -= 15;
     reports.alerts.push({ level: 'critical', message: 'SEO Critical: Missing Meta Description tag.' });
+  }
+
+  // 2.5 Meta Keywords Detection
+  const keywordMatch = html.match(/<meta\s+[^>]*name=["']keywords["'][^>]*content=["']([^"']*)["']/i) ||
+                       html.match(/<meta\s+[^>]*content=["']([^"']*)["'][^>]*name=["']keywords["']/i);
+  if (keywordMatch && keywordMatch[1].trim()) {
+    reports.keywordsMeta.text = keywordMatch[1].trim();
+    reports.keywordsMeta.status = "ok";
+    reports.keywordsMeta.message = "Meta keywords found.";
+  } else {
+    reports.keywordsMeta.text = "No keywords found";
+    reports.keywordsMeta.status = "warning";
+    reports.keywordsMeta.message = "No meta keywords tag detected.";
   }
 
   // 3. Canonical Check
@@ -636,6 +651,43 @@ const analyzeSeo = async (url, htmlContent = '') => {
     reports.alerts.push({ level: 'critical', message: 'SEO Critical: Missing Viewport Meta Tag for mobile scaling.' });
   }
 
+  // 12. Schema Markup Detection (JSON-LD)
+  const schemaMatches = [...html.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  if (schemaMatches.length > 0) {
+    reports.schemaMarkup.present = true;
+    let isValid = true;
+    
+    schemaMatches.forEach(match => {
+      try {
+        const schemaObj = JSON.parse(match[1].trim());
+        const schemas = Array.isArray(schemaObj) ? schemaObj : [schemaObj];
+        
+        schemas.forEach(schema => {
+          const items = schema['@graph'] || [schema];
+          items.forEach(item => {
+            if (item && item['@type']) {
+              reports.schemaMarkup.types.push(item['@type']);
+              reports.schemaMarkup.items.push(item);
+            }
+          });
+        });
+      } catch (err) {
+        isValid = false;
+        reports.alerts.push({ level: 'warning', message: 'SEO Warning: Invalid JSON-LD Schema markup found (Syntax Error).' });
+      }
+    });
+
+    if (isValid && reports.schemaMarkup.types.length > 0) {
+      reports.schemaMarkup.valid = true;
+      reports.schemaMarkup.message = `Valid schema detected: ${[...new Set(reports.schemaMarkup.types)].join(', ')}`;
+      reports.seoScore += 5; // Bonus for having valid schema
+    } else if (isValid) {
+      reports.schemaMarkup.message = "Schema block found but no recognized @type definitions.";
+    } else {
+      reports.schemaMarkup.message = "JSON syntax error in one or more schema blocks.";
+    }
+  }
+
   // 9. Keyword Frequency Analysis
   const bodyText = html
     .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
@@ -666,6 +718,7 @@ const analyzeSeo = async (url, htmlContent = '') => {
   let internal = 0;
   let external = 0;
   const discoveredInternalUrls = new Set();
+  const discoveredExternalUrls = new Set();
   if (url) discoveredInternalUrls.add(url);
 
   let parsedBase = null;
@@ -676,15 +729,20 @@ const analyzeSeo = async (url, htmlContent = '') => {
     if (!l || l.startsWith("#") || l.startsWith("javascript:") || l.startsWith("mailto:") || l.startsWith("tel:")) continue;
     try {
       const resolved = new URL(l, url);
-      if (parsedBase && resolved.origin === parsedBase.origin) {
+      const baseHostname = parsedBase ? parsedBase.hostname.replace(/^www\./, '') : '';
+      const resolvedHostname = resolved.hostname.replace(/^www\./, '');
+
+      if (parsedBase && (resolvedHostname === baseHostname || resolvedHostname.endsWith('.' + baseHostname))) {
         internal++;
         if (discoveredInternalUrls.size < 100) {
-          // Normalize: strip hash
           resolved.hash = '';
           discoveredInternalUrls.add(resolved.href);
         }
-      } else if (l.startsWith("http")) {
+      } else if (l.startsWith("http") || l.startsWith("//")) {
         external++;
+        if (discoveredExternalUrls.size < 50) {
+          discoveredExternalUrls.add(resolved.href);
+        }
       }
     } catch (e) {
       if (l.startsWith("/")) {
@@ -739,21 +797,64 @@ const analyzeSeo = async (url, htmlContent = '') => {
   reports.links.internalCount = internal;
   reports.links.externalCount = external;
 
-  // Broken links checks
-  const brokenLinksList = [];
-  if (html.includes("href=\"/broken-link-error-404\"") || html.includes("href=\"/undefined\"") || html.includes("href=\"/null\"")) {
-    brokenLinksList.push({ url: "/broken-link-error-404", type: "internal", reason: "HTTP 404 Not Found" });
-  }
-  
-  if (external > 15) {
-    brokenLinksList.push({ url: "https://expired-ad-service.net/tracker.js", type: "external", reason: "DNS Lookup Failed" });
-  }
+  // Real-time Broken links / 404 detection
+  const detect404Pages = async (links, isInternal = true, limit = 10) => {
+    const brokenLinks = [];
+    const urlsToCheck = Array.from(links).filter(l => l !== url).slice(0, limit);
+    const tasks = urlsToCheck.map(async (link) => {
+      try {
+        const resp = await axios.head(link, { 
+          timeout: 2500, 
+          httpsAgent, 
+          validateStatus: () => true 
+        });
+        if (resp.status === 404) {
+          brokenLinks.push({ url: link, type: isInternal ? 'internal' : 'external', reason: 'HTTP 404 Not Found', foundOn: url });
+        } else if (resp.status >= 500) {
+          brokenLinks.push({ url: link, type: isInternal ? 'internal' : 'external', reason: `HTTP ${resp.status} Server Error`, foundOn: url });
+        }
+      } catch (err) {
+        brokenLinks.push({ url: link, type: isInternal ? 'internal' : 'external', reason: 'Network/DNS Error', foundOn: url });
+      }
+    });
+    await Promise.all(tasks);
+    return brokenLinks;
+  };
+
+  // Real-time Redirection detection
+  const detectRedirects = async (links, isInternal = true, limit = 10) => {
+    const redirects = [];
+    const urlsToCheck = Array.from(links).filter(l => l !== url).slice(0, limit);
+    const tasks = urlsToCheck.map(async (link) => {
+      try {
+        const resp = await axios.head(link, { 
+          timeout: 2500, 
+          httpsAgent, 
+          validateStatus: () => true,
+          maxRedirects: 0
+        });
+        if (resp.status >= 300 && resp.status < 400 && resp.headers.location) {
+          redirects.push({ url: link, type: isInternal ? 'internal' : 'external', reason: `HTTP ${resp.status} Redirect to ${resp.headers.location}`, foundOn: url, isRedirect: true });
+        }
+      } catch (err) {
+        // ignore
+      }
+    });
+    await Promise.all(tasks);
+    return redirects;
+  };
+
+  const internalBrokenLinks = await detect404Pages(discoveredInternalUrls, true, 10);
+  const externalBrokenLinks = await detect404Pages(discoveredExternalUrls, false, 5);
+  const internalRedirects = await detectRedirects(discoveredInternalUrls, true, 10);
+  const externalRedirects = await detectRedirects(discoveredExternalUrls, false, 5);
+  const brokenLinksList = [...internalBrokenLinks, ...externalBrokenLinks];
 
   reports.links.brokenCount = brokenLinksList.length;
-  reports.links.brokenLinks = brokenLinksList;
+  reports.links.brokenLinks = [...brokenLinksList, ...internalRedirects, ...externalRedirects];
   if (reports.links.brokenCount > 0) {
     reports.seoScore -= reports.links.brokenCount * 5;
-    reports.alerts.push({ level: 'warning', message: `SEO Warning: Detected ${reports.links.brokenCount} broken links or missing resources.` });
+    reports.alerts.push({ level: 'warning', message: `SEO Warning: Detected ${reports.links.brokenCount} broken links (404/500 errors).` });
   }
 
   // 11. Image Alt and Description Analysis (Real-time check)
