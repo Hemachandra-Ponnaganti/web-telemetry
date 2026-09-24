@@ -4,7 +4,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
 import {
   Activity, ShieldCheck, ShieldAlert, Wifi, Globe, Database, FileText,
   AlertTriangle, Download, Printer, CheckCircle2, XCircle, Clock,
-  Layers, Search, AlertCircle, Image, Link, Sparkles, Monitor, Smartphone, Zap
+  Layers, Search, AlertCircle, Image, Link, Sparkles, Monitor, Smartphone, Zap, Sliders
 } from 'lucide-react';
 import SeoDashboard from './SeoDashboard';
 import SSLMonitor from './SSLMonitor';
@@ -497,6 +497,61 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
           </div>
         </div>
 
+      </div>
+      
+      {/* SRE Server Resources Widget */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+        <div className="glass-card p-6 border border-slate-800 relative overflow-hidden">
+           <div className="flex justify-between items-center mb-4">
+             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">CPU Usage</span>
+             <Sliders className="text-pink-400 h-5 w-5" />
+           </div>
+           {(() => {
+             let parsed = null;
+             try { if (latestStatus?.serverResourcesData) parsed = JSON.parse(latestStatus.serverResourcesData); } catch(e){}
+             const res = parsed || { cpuUsage: 0, cpuLimit: 100, isMock: true };
+             
+             const pct = Math.min(100, ((res.cpuUsage || 0) / (res.cpuLimit || 100)) * 100);
+             return (
+               <>
+                 <div className="flex items-end gap-2">
+                   <h2 className="text-3xl font-black tracking-tight text-slate-100">{res.cpuUsage || 0}%</h2>
+                   <span className="text-slate-500 text-sm mb-1 font-medium">/ {res.cpuLimit || 100}% Limit</span>
+                 </div>
+                 <div className="w-full bg-slate-800/50 rounded-full h-2.5 mt-4">
+                   <div className="bg-pink-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${pct}%` }}></div>
+                 </div>
+                 <p className="text-[10px] text-slate-500 mt-3">{res.isMock ? 'Simulated CPU Load (Agent Unreachable)' : 'Live Server Telemetry'}</p>
+               </>
+             )
+           })()}
+        </div>
+        
+        <div className="glass-card p-6 border border-slate-800 relative overflow-hidden">
+           <div className="flex justify-between items-center mb-4">
+             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Memory Usage</span>
+             <Layers className="text-amber-400 h-5 w-5" />
+           </div>
+           {(() => {
+             let parsed = null;
+             try { if (latestStatus?.serverResourcesData) parsed = JSON.parse(latestStatus.serverResourcesData); } catch(e){}
+             const res = parsed || { memoryUsage: 0, memoryLimit: 100, isMock: true };
+             
+             const pct = Math.min(100, ((res.memoryUsage || 0) / (res.memoryLimit || 100)) * 100);
+             return (
+               <>
+                 <div className="flex items-end gap-2">
+                   <h2 className="text-3xl font-black tracking-tight text-slate-100">{res.memoryUsage || 0}%</h2>
+                   <span className="text-slate-500 text-sm mb-1 font-medium">/ {res.memoryLimit || 100}% Limit</span>
+                 </div>
+                 <div className="w-full bg-slate-800/50 rounded-full h-2.5 mt-4">
+                   <div className="bg-amber-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${pct}%` }}></div>
+                 </div>
+                 <p className="text-[10px] text-slate-500 mt-3">{res.isMock ? 'Simulated Memory Load (Agent Unreachable)' : 'Live Server Telemetry'}</p>
+               </>
+             )
+           })()}
+        </div>
       </div>
 
       {/* SRE Global SEO Check Widget */}
