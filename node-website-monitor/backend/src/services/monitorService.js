@@ -432,16 +432,46 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       responseHeaders = response.headers || {};
     }
 
-    if (!auditReport.isUp) {
-      auditReport.errors.push(`HTTP status returned: ${response.status}`);
+    // Database Availability Check
+    let isDbError = false;
+    if (htmlContent) {
+      const lowerHtml = (typeof htmlContent === 'string' ? htmlContent : String(htmlContent)).toLowerCase();
+      const dbErrors = [
+        'error establishing a database connection',
+        'database connection error',
+        'could not connect to the database',
+        'sqlstate[hy000]',
+        'mysqli_connect()',
+        'connection refused'
+      ];
+      
+      const dbErrorFound = dbErrors.find(err => lowerHtml.includes(err));
+      if (dbErrorFound) {
+        auditReport.isUp = false; // Mark site as effectively down
+        isDbError = true;
+        auditReport.errors.push(`Database connection failure detected: "${dbErrorFound}"`);
+        
+        await Alert.create({
+          url,
+          category: 'database',
+          level: 'critical',
+          message: `CRITICAL: Database connection failed! The website is displaying a database error message.`
+        });
+        await sendAlertEmail(url, 'database', 'critical', `CRITICAL: Database connection failed! The website is displaying a database error message.`);
+        await sendAlertEmailToWebsite(url, 'database', 'critical', `CRITICAL: Database connection failed! The website is displaying a database error message. Check your database server immediately.`);
+      }
+    }
+
+    if (!auditReport.isUp && !isDbError) {
+      auditReport.errors.push(`HTTP status returned: ${auditReport.statusCode}`);
       await Alert.create({
         url,
         category: 'uptime',
         level: 'critical',
-        message: `Downtime detected! Website returned HTTP ${response.status} status code.`
+        message: `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`
       });
-      await sendAlertEmail(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${response.status} status code.`);
-      await sendAlertEmailToWebsite(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${response.status} status code.`);
+      await sendAlertEmail(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`);
+      await sendAlertEmailToWebsite(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`);
     }
   } catch (err) {
     axiosInstance.interceptors.request.eject(interceptorId);

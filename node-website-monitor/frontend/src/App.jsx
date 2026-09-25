@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { ShieldCheck, ShieldAlert, Activity, Cpu, Search, RefreshCw, AlertTriangle, AlertCircle, BellRing, Sun, Moon, X, Clock, Star, Menu, BarChart2, Globe, Shield, Image as ImageIcon, Eye, Layers, Mail, Settings, CalendarClock } from 'lucide-react';
+import { Database, ShieldCheck, ShieldAlert, Activity, Cpu, Search, RefreshCw, AlertTriangle, AlertCircle, BellRing, Sun, Moon, X, Clock, Star, Menu, BarChart2, Globe, Shield, Image as ImageIcon, Eye, Layers, Mail, Settings, CalendarClock } from 'lucide-react';
 import UptimeDashboard from './components/UptimeDashboard';
 import WordPressDashboard from './components/WordPressDashboard';
 import SSLMonitor from './components/SSLMonitor';
@@ -18,6 +18,7 @@ import ImageOptimizationAnalyzer from './components/ImageOptimizationAnalyzer';
 import AdminLogin from './components/AdminLogin';
 import DomainExpiryDashboard from './components/DomainExpiryDashboard';
 import WebsitesCatalog from './components/WebsitesCatalog';
+import DatabaseDashboard from './components/DatabaseDashboard';
 
 // ── Error Boundary — catches render errors in dropdown/child components
 // without blanking the entire page ──────────────────────────────────────────
@@ -729,6 +730,7 @@ export default function App() {
                 { id: 'seo', label: 'SEO Optimization', icon: Globe },
                 { id: 'ssl', label: 'SSL & Security', icon: Shield },
                 { id: 'malware', label: 'Malware Scan', icon: ShieldAlert },
+                { id: 'database', label: 'Database Monitoring', icon: Database },
                 { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
                 { id: 'accessibility', label: 'Accessibility', icon: Eye },
                 { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
@@ -871,6 +873,9 @@ export default function App() {
                     )}
                     {activeTab === 'wordpress' && (
                       <WordPressDashboard wordpressData={safeStats.wordpress} />
+                    )}
+                    {activeTab === 'database' && (
+                      <DatabaseDashboard historyLog={safeStats.historyLog} currentStatus={safeStats.latestStatus} />
                     )}
                     {activeTab === 'ssl' && (
                       <SSLMonitor sslData={safeStats?.sslData} securityData={safeStats?.securityData} />
