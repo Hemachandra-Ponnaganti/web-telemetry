@@ -211,11 +211,14 @@ const processEmail = async (email) => {
       const isGmail = hostUser.toLowerCase().includes('@gmail.com');
       const transporter = nodemailer.createTransport(
         isGmail ? {
-          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
           auth: { user: hostUser, pass: hostPass },
           connectionTimeout: 10000,
           greetingTimeout: 10000,
-          socketTimeout: 10000
+          socketTimeout: 10000,
+          tls: { rejectUnauthorized: false }
         } : {
           host: process.env.EMAIL_HOST || 'localhost',
           port: parseInt(process.env.EMAIL_PORT) || 25,
