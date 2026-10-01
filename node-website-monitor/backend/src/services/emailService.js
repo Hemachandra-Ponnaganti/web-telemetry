@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+require('dns').setDefaultResultOrder('ipv4first');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -218,7 +219,8 @@ const processEmail = async (email) => {
           connectionTimeout: 10000,
           greetingTimeout: 10000,
           socketTimeout: 10000,
-          tls: { rejectUnauthorized: false }
+          tls: { rejectUnauthorized: false },
+          family: 4
         } : {
           host: process.env.EMAIL_HOST || 'localhost',
           port: parseInt(process.env.EMAIL_PORT) || 25,
