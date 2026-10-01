@@ -576,7 +576,7 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
                         );
                       case 'failed':
                         return (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/10 text-rose-450 border border-rose-500/20 text-[9px] font-black uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/10 text-rose-450 border border-rose-500/20 text-[9px] font-black uppercase tracking-wider" title={entry.errorReason || 'Failed to send email'}>
                             ❌ Failed
                           </span>
                         );
