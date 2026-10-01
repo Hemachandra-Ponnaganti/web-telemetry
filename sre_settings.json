@@ -1,9 +1,9 @@
 {
     "slack_webhook": "https://hooks.slack.com/services/T00/B00/XRE2026",
     "telegram_chat_id": "-10098471203",
-    "critical_email": "kasarlaharshika@gmail.com",
-    "email_host_user": "kasarlaharshika@gmail.com",
-    "email_host_password": "ugyzjormjogqocsg",
-    "alert_email_recipients": "tabithakathi@gmail.com",
+    "critical_email": "hemachandra@gadigitalsolutions.com",
+    "email_host_user": "hemachandra.ponnaganti@gmail.com",
+    "email_host_password": "xdfu odwk fnzs rhhj",
+    "alert_email_recipients": "hemachandra@gadigitalsolutions.com",
     "alerts_enabled": true
 }

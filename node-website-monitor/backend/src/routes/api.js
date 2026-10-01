@@ -192,17 +192,29 @@ router.get('/email-config', async (req, res) => {
 });
 
 router.post('/email-config', async (req, res) => {
-  const { url, alertEmail, alertsEnabled, alertFrequency } = req.body;
+  const { url, alertEmail, alertsEnabled, alertFrequency, reportEmail, reportsEnabled, reportFrequency } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required.' });
   // Basic email validation
   if (alertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
-    return res.status(400).json({ error: 'Invalid email address format.' });
+    return res.status(400).json({ error: 'Invalid alert email address format.' });
+  }
+  if (reportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reportEmail)) {
+    return res.status(400).json({ error: 'Invalid report email address format.' });
   }
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
+    const updatePayload = {
+      alertEmail: alertEmail || '',
+      alertsEnabled: !!alertsEnabled,
+      alertFrequency: alertFrequency || 'instant',
+      reportEmail: reportEmail !== undefined ? reportEmail : '',
+      reportsEnabled: !!reportsEnabled,
+      reportFrequency: reportFrequency || '48h',
+      updatedAt: new Date()
+    };
     const config = await WebsiteEmailConfig.findOneAndUpdate(
       { url },
-      { alertEmail: alertEmail || '', alertsEnabled: !!alertsEnabled, alertFrequency: alertFrequency || 'instant', updatedAt: new Date() },
+      updatePayload,
       { upsert: true, new: true }
     );
     res.status(200).json({ success: true, config });
@@ -219,6 +231,29 @@ router.get('/email-history', async (req, res) => {
     const query = url ? { url } : {};
     const history = await EmailAlertHistory.find(query).sort({ sentAt: -1 }).limit(50);
     res.status(200).json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Test periodic report for specific website (NEW) ─────────────────────────
+router.post('/test-site-report', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required.' });
+  try {
+    const { WebsiteEmailConfig } = require('../models/Schemas');
+    const { sendPeriodicReportEmail } = require('../services/emailService');
+    const { compileStats } = require('../services/monitorService');
+
+    const config = await WebsiteEmailConfig.findOne({ url });
+    if (!config || !config.reportEmail) {
+      return res.status(400).json({ success: false, error: 'No report email configured for this website. Save a report email address first.' });
+    }
+
+    const stats = await compileStats(url);
+    await sendPeriodicReportEmail(url, config.reportEmail, stats);
+
+    res.status(200).json({ success: true, message: 'Test report generation started and added to the mail queue!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

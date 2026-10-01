@@ -35,11 +35,16 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
     alertEmail:     '',
     alertsEnabled:  false,
     alertFrequency: 'instant',
+    reportEmail:    '',
+    reportsEnabled: false,
+    reportFrequency:'48h',
     totalEmailsSent: 0,
     lastEmailSent:   null,
     lastAlertType:   '',
+    lastReportSent:  null,
   });
   const [emailInput, setEmailInput]   = useState('');
+  const [reportEmailInput, setReportEmailInput] = useState('');
   const [emailError, setEmailError]   = useState('');
   const [saving, setSaving]           = useState(false);
   const [testing, setTesting]         = useState(false);
@@ -56,6 +61,7 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       const data = resp.data || {};
       setConfig(data);
       setEmailInput(data.alertEmail || '');
+      setReportEmailInput(data.reportEmail || '');
     } catch (err) {
       console.error('Failed to load email config:', err);
     } finally {
@@ -126,7 +132,11 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
   const handleSave = async () => {
     // Validate email
     if (emailInput && !isValidEmail(emailInput)) {
-      setEmailError('Please enter a valid email address (e.g. user@gmail.com)');
+      setEmailError('Please enter a valid alert email address.');
+      return;
+    }
+    if (reportEmailInput && !isValidEmail(reportEmailInput)) {
+      setEmailError('Please enter a valid report email address.');
       return;
     }
     setEmailError('');
@@ -137,16 +147,19 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         alertEmail:     emailInput,
         alertsEnabled:  config.alertsEnabled,
         alertFrequency: config.alertFrequency,
+        reportEmail:    reportEmailInput,
+        reportsEnabled: config.reportsEnabled,
+        reportFrequency:config.reportFrequency,
       });
       if (resp.data.success) {
-        setConfig(prev => ({ ...prev, alertEmail: emailInput }));
+        setConfig(prev => ({ ...prev, alertEmail: emailInput, reportEmail: reportEmailInput }));
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
-        showToast('Email alert settings saved successfully!', 'success');
+        showToast('Settings saved successfully!', 'success');
         fetchConfig();
       }
     } catch (err) {
-      const msg = err.response?.data?.error || 'Failed to save email settings.';
+      const msg = err.response?.data?.error || 'Failed to save settings.';
       setEmailError(msg);
       showToast(msg, 'error');
     } finally {
@@ -167,6 +180,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         alertEmail:     emailInput || config.alertEmail,
         alertsEnabled:  newEnabled,
         alertFrequency: config.alertFrequency,
+        reportEmail:    reportEmailInput || config.reportEmail,
+        reportsEnabled: config.reportsEnabled,
+        reportFrequency:config.reportFrequency,
       });
       showToast(newEnabled ? 'Email alerts enabled for this website.' : 'Email alerts disabled.', newEnabled ? 'success' : 'info');
     } catch (err) {
@@ -174,6 +190,32 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       showToast('Failed to toggle alerts.', 'error');
     }
   };
+
+  const handleToggleReports = async () => {
+    if (!config.reportEmail && !reportEmailInput) {
+      setEmailError('Enter an email address before enabling reports.');
+      return;
+    }
+    const newEnabled = !config.reportsEnabled;
+    setConfig(prev => ({ ...prev, reportsEnabled: newEnabled }));
+    try {
+      await axios.post(`${API_BASE}/email-config`, {
+        url:            siteUrl,
+        alertEmail:     emailInput || config.alertEmail,
+        alertsEnabled:  config.alertsEnabled,
+        alertFrequency: config.alertFrequency,
+        reportEmail:    reportEmailInput || config.reportEmail,
+        reportsEnabled: newEnabled,
+        reportFrequency:config.reportFrequency,
+      });
+      showToast(newEnabled ? 'Periodic reports enabled.' : 'Periodic reports disabled.', newEnabled ? 'success' : 'info');
+    } catch (err) {
+      setConfig(prev => ({ ...prev, reportsEnabled: !newEnabled }));
+      showToast('Failed to toggle reports.', 'error');
+    }
+  };
+
+  const [testingReport, setTestingReport] = useState(false);
 
   const handleTestEmail = async () => {
     if (!config.alertEmail) {
@@ -193,6 +235,27 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       showToast(err.response?.data?.error || 'Test email failed.', 'error');
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleTestReport = async () => {
+    if (!config.reportEmail) {
+      showToast('Save a report email address first before sending a test report.', 'error');
+      return;
+    }
+    setTestingReport(true);
+    try {
+      const resp = await axios.post(`${API_BASE}/test-site-report`, { url: siteUrl });
+      if (resp.data.success) {
+        showToast(resp.data.message, 'success');
+        fetchHistory();
+      } else {
+        showToast(resp.data.error || 'Test report failed.', 'error');
+      }
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Test report failed.', 'error');
+    } finally {
+      setTestingReport(false);
     }
   };
 
@@ -314,8 +377,88 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
           </div>
         )}
 
+        {/* ── Periodic Report Config Card ──────────────────────────────────────── */}
+        <div className="glass-card p-6 space-y-5 mt-4">
+          <div className="flex items-center justify-between border-b border-slate-800/60 pb-4">
+            <div>
+              <h3 className="text-slate-200 font-extrabold text-sm flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-400" /> Scheduled Reports
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Automated health and performance reports sent to a specific email.</p>
+            </div>
+            {/* Enable Reports toggle */}
+            <button onClick={handleToggleReports} className="flex items-center gap-2 cursor-pointer focus:outline-none" title="Toggle scheduled reports">
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${config.reportsEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {config.reportsEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+              {config.reportsEnabled
+                ? <ToggleRight className="h-7 w-7 text-emerald-400" />
+                : <ToggleLeft className="h-7 w-7 text-slate-600" />}
+            </button>
+          </div>
+
+          {/* Report email input */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+              Report Email Address *
+            </label>
+            <div className={`flex items-center gap-2 bg-slate-900/60 border rounded-xl px-3.5 py-2.5 transition-all ${emailError && emailError.includes('report') ? 'border-rose-500/50' : 'border-slate-800 focus-within:border-emerald-500/60'}`}>
+              <Mail className="h-4 w-4 text-slate-500 shrink-0" />
+              <input
+                type="email"
+                placeholder="reports@yourdomain.com"
+                value={reportEmailInput}
+                onChange={e => { setReportEmailInput(e.target.value); setEmailError(''); }}
+                className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+              />
+              {reportEmailInput && isValidEmail(reportEmailInput) && (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 italic">
+              Routine reports will be emailed to this address. Can be different from your alert email.
+            </p>
+          </div>
+
+          {/* Report frequency */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+              Report Frequency
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { value: '12h', label: '12h', desc: 'Twice daily' },
+                { value: '24h', label: '24h', desc: 'Daily' },
+                { value: '48h', label: '48h', desc: 'Every 2 days' },
+                { value: '72h', label: '72h', desc: 'Every 3 days' },
+                { value: '7d',  label: '7d',  desc: 'Weekly' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setConfig(prev => ({ ...prev, reportFrequency: opt.value }))}
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                    config.reportFrequency === opt.value
+                      ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
+                      : 'bg-slate-800/30 border-slate-700/50 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-wider">{opt.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {config.lastReportSent && (
+            <div className="pt-2">
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                Last Report Sent: <span className="text-slate-300">{new Date(config.lastReportSent).toLocaleString()}</span>
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Action buttons */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/40">
+        <div className="flex flex-wrap gap-2 pt-4">
           <button
             onClick={handleSave}
             disabled={saving}
@@ -331,7 +474,16 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
             className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600/80 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-all disabled:opacity-50"
           >
             {testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-            {testing ? 'Sending...' : 'Send Test Email'}
+            {testing ? 'Sending...' : 'Test Alert'}
+          </button>
+
+          <button
+            onClick={handleTestReport}
+            disabled={testingReport || !config.reportEmail}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-teal-600/80 hover:bg-teal-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-all disabled:opacity-50"
+          >
+            {testingReport ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+            {testingReport ? 'Sending...' : 'Test Report'}
           </button>
 
           <button

@@ -377,6 +377,10 @@ const websiteEmailConfigSchema = new mongoose.Schema({
   lastEmailSent:    { type: Date, default: null },
   totalEmailsSent:  { type: Number, default: 0 },
   lastAlertType:    { type: String, default: '' },
+  reportEmail:      { type: String, default: '' },
+  reportsEnabled:   { type: Boolean, default: false },
+  reportFrequency:  { type: String, enum: ['12h', '24h', '48h', '72h', '7d'], default: '48h' },
+  lastReportSent:   { type: Date, default: null },
   updatedAt:        { type: Date, default: Date.now }
 });
 
@@ -395,7 +399,7 @@ const WebsiteEmailConfig = {
       saveToDisk();
       return inMemoryEmailConfig[index];
     } else if (options.upsert) {
-      const doc = { url: query.url, alertEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
+      const doc = { url: query.url, alertEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', reportEmail: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
       inMemoryEmailConfig.push(doc);
       saveToDisk();
       return doc;

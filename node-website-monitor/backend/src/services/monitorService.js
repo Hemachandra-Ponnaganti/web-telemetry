@@ -912,6 +912,53 @@ const startUptimeScheduler = (io) => {
       console.error(`❌ Cron Auditer error: ${err.message}`);
     }
   });
+
+  // Schedule the periodic report generator to run every hour
+  const reportCronExpression = '0 * * * *'; // Every hour at minute 0
+  console.log(`⏱️ Periodic Report scheduler initialized [Cron: "${reportCronExpression}"]`);
+  
+  cron.schedule(reportCronExpression, async () => {
+    console.log(`📊 Periodic Report Generator: Checking for due reports at [${new Date().toLocaleTimeString()}]...`);
+    try {
+      const { ScannedWebsite, WebsiteEmailConfig } = require('../models/Schemas');
+      const { sendPeriodicReportEmail } = require('./emailService');
+      
+      const sites = await ScannedWebsite.find({});
+      for (const site of sites) {
+        if (!site.url) continue;
+        
+        // Find the specific config for this website
+        const config = await WebsiteEmailConfig.findOne({ url: site.url });
+        if (config && config.reportsEnabled && config.reportEmail) {
+          
+          let frequencyHours = 48; // default
+          if (config.reportFrequency === '12h') frequencyHours = 12;
+          else if (config.reportFrequency === '24h') frequencyHours = 24;
+          else if (config.reportFrequency === '48h') frequencyHours = 48;
+          else if (config.reportFrequency === '72h') frequencyHours = 72;
+          else if (config.reportFrequency === '7d') frequencyHours = 168;
+
+          const requiredIntervalMs = frequencyHours * 60 * 60 * 1000;
+          const lastSentTime = config.lastReportSent ? new Date(config.lastReportSent).getTime() : 0;
+          const now = Date.now();
+
+          if (now - lastSentTime >= requiredIntervalMs) {
+            console.log(`📊 Generating ${config.reportFrequency} periodic report for ${site.url} to ${config.reportEmail}...`);
+            const stats = await compileStats(site.url);
+            await sendPeriodicReportEmail(site.url, config.reportEmail, stats);
+            
+            // Update lastReportSent
+            await WebsiteEmailConfig.findOneAndUpdate(
+              { url: site.url },
+              { lastReportSent: new Date() }
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`❌ Periodic Report Generator error: ${err.message}`);
+    }
+  });
 };
 
 module.exports = {

@@ -527,9 +527,197 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
   }
 };
 
+/**
+ * Send periodic performance and security report email.
+ */
+const sendPeriodicReportEmail = async (url, recipient, stats) => {
+  try {
+    const subject = `[MonitorPro] 48-Hour Health Report for ${url}`;
+    
+    // Build a nicely formatted HTML table for recent scan history
+    let historyRows = '';
+    if (stats.historyLog && stats.historyLog.length > 0) {
+      historyRows = stats.historyLog.slice(0, 10).map(log => {
+        const statusColor = log.isUp ? '#22c55e' : '#ef4444';
+        const statusText = log.isUp ? 'UP' : 'DOWN';
+        const date = new Date(log.checkedAt).toLocaleString();
+        return `
+          <tr>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569;">${date}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:12px;"><span style="color:white;background:${statusColor};padding:2px 6px;border-radius:4px;font-weight:bold;">${statusText}</span></td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569;">${log.statusCode || '-'}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569;">${log.loadTimeMs ? log.loadTimeMs + 'ms' : '-'}</td>
+            <td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:12px;color:#475569;font-weight:bold;color:#f59e0b;">${log.seo?.seoScore || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    } else {
+      historyRows = '<tr><td colspan="5" style="padding:10px;text-align:center;font-size:12px;color:#64748b;">No scans recorded in this period.</td></tr>';
+    }
+
+    // Generate a QuickChart URL for the graphical representation
+    let chartUrl = '';
+    if (stats.historyLog && stats.historyLog.length > 0) {
+      // Get up to 20 most recent logs and reverse them so they are chronological (oldest to newest)
+      const chartData = [...stats.historyLog].slice(0, 20).reverse();
+      const labels = chartData.map(log => {
+        const d = new Date(log.checkedAt);
+        return `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+      });
+      const dataPointsOverall = chartData.map(log => {
+        const perfVal = log.performance?.performanceScore || 90;
+        const seoVal = log.seo?.seoScore || 85;
+        const secVal = log.security?.securityScore || 90;
+        const uiVal = log.uiUx?.uiHealthScore || 85;
+        return Math.round((perfVal + seoVal + secVal + uiVal) / 4);
+      });
+      const dataPointsPerf = chartData.map(log => log.performance?.performanceScore || 90);
+      const dataPointsSEO = chartData.map(log => log.seo?.seoScore || 85);
+      const dataPointsSec = chartData.map(log => log.security?.securityScore || 90);
+      
+      const chartConfig = {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Overall SRE Score',
+              data: dataPointsOverall,
+              borderColor: '#4f46e5',
+              backgroundColor: 'transparent',
+              borderWidth: 2.5,
+              tension: 0.4,
+              pointRadius: 0
+            },
+            {
+              label: 'Performance Score',
+              data: dataPointsPerf,
+              borderColor: '#10b981',
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              tension: 0.4,
+              pointRadius: 0
+            },
+            {
+              label: 'Security Score',
+              data: dataPointsSec,
+              borderColor: '#0ea5e9',
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              tension: 0.4,
+              pointRadius: 0
+            },
+            {
+              label: 'SEO Score',
+              data: dataPointsSEO,
+              borderColor: '#f59e0b',
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              tension: 0.4,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          plugins: {
+            legend: { 
+              display: true, 
+              position: 'top', 
+              labels: { color: '#e2e8f0', boxWidth: 6, usePointStyle: true, font: { size: 10, family: 'sans-serif' } } 
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+              ticks: { color: '#94a3b8', font: { size: 9, family: 'sans-serif' } }
+            },
+            y: { 
+              type: 'linear', 
+              display: true, 
+              position: 'left',
+              min: 0, 
+              max: 100,
+              grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+              ticks: { color: '#94a3b8', font: { size: 9, family: 'sans-serif' }, stepSize: 25 }
+            }
+          },
+          layout: { padding: 10 }
+        }
+      };
+      
+      // We use encodeURIComponent to ensure the JSON safely passes in the URL.
+      // Important: version=3 is required because the scales config uses Chart.js v3+ syntax.
+      chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=650&h=300&bkg=0f172a`;
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;padding:20px;color:#1e293b;">
+      <div style="max-width:650px;margin:0 auto;background:white;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 6px rgba(0,0,0,0.05);overflow:hidden;">
+        <div style="background:#4f46e5;color:white;padding:20px 24px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;opacity:0.85;margin-bottom:4px;">Periodic SRE Report</div>
+          <div style="font-size:20px;font-weight:800;">Website Health & Performance Report</div>
+        </div>
+        
+        <div style="padding:24px;">
+          <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin-bottom:24px;">
+            <div style="font-size:16px;font-weight:bold;color:#0f172a;margin-bottom:8px;">Target: <a href="${url}" style="color:#4f46e5;text-decoration:none;">${url}</a></div>
+            <div style="font-size:13px;color:#475569;">
+              <strong>Uptime:</strong> ${stats.uptimePercentage}% <br>
+              <strong>Total Checks:</strong> ${stats.totalChecks}
+            </div>
+          </div>
+          
+          ${chartUrl ? `
+          <h3 style="font-size:14px;font-weight:800;color:#0f172a;margin:0 0 10px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Performance Trend</h3>
+          <div style="margin-bottom:24px;text-align:center;border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#ffffff;">
+            <img src="${chartUrl}" alt="Performance Chart" style="max-width:100%;height:auto;border-radius:4px;display:block;margin:0 auto;" />
+          </div>
+          ` : ''}
+
+          <h3 style="font-size:14px;font-weight:800;color:#0f172a;margin:0 0 10px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Recent Audit History (Last 10 Scans)</h3>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:24px;text-align:left;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:10px;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Date / Time</th>
+                <th style="padding:10px;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Status</th>
+                <th style="padding:10px;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">HTTP</th>
+                <th style="padding:10px;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Load Time</th>
+                <th style="padding:10px;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">SEO</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${historyRows}
+            </tbody>
+          </table>
+          
+          <p style="font-size:13px;color:#64748b;line-height:1.5;">This is an automated 48-hour periodic health report generated by MonitorPro. To change the notification settings for this website, please log in to your SRE dashboard.</p>
+        </div>
+        
+        <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 24px;font-size:11px;color:#94a3b8;text-align:center;">
+          MonitorPro SRE Dashboard · <a href="${url}" style="color:#6366f1;text-decoration:none;">View Dashboard</a>
+        </div>
+      </div>
+    </body></html>`;
+
+    await enqueueEmailAlert({
+      url,
+      recipient,
+      category: 'report',
+      level: 'info',
+      subject,
+      message: 'Periodic 48-hour website health report generated.',
+      html
+    });
+    
+    console.log(`📧 Queued periodic 48h report email for ${url} to ${recipient}`);
+  } catch (err) {
+    console.error('❌ Error sending periodic report email:', err.message);
+  }
+};
+
 module.exports = {
   sendAlertEmail,
   sendAlertEmailToWebsite,
+  sendPeriodicReportEmail,
   enqueueEmailAlert,
   initializeEmailQueue,
   setIoInstance
