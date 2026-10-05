@@ -3,6 +3,7 @@ require('dns').setDefaultResultOrder('ipv4first');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { loadSettings } = require('../config/settingsHelper');
 
 const logFilePath = path.join(__dirname, '../../../email_delivery.log');
 
@@ -138,24 +139,7 @@ const trackResendDelivery = (dbId, messageId, apiKey) => {
 const processEmail = async (email) => {
   const { EmailAlertHistory } = require('../models/Schemas');
   
-  let settings = {
-    critical_email: process.env.CRITICAL_EMAIL || 'alex.rivera@monitorpro.sre',
-    email_host_user: process.env.EMAIL_HOST_USER || '',
-    email_host_password: process.env.EMAIL_HOST_PASSWORD || '',
-    alerts_enabled: true,
-    resend_api_key: '',
-    resend_from_email: ''
-  };
-
-  const settingsPath = path.join(__dirname, '../../../../sre_settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...settings, ...JSON.parse(data) };
-    }
-  } catch (err) {
-    console.error('⚠️ Failed to load settings dynamically in worker:', err.message);
-  }
+  const settings = loadSettings();
 
   if (settings.alerts_enabled === false) {
     console.log('🔇 Alerts are globally disabled in settings. Skipping email.');
@@ -212,15 +196,11 @@ const processEmail = async (email) => {
       const isGmail = hostUser.toLowerCase().includes('@gmail.com');
       const transporter = nodemailer.createTransport(
         isGmail ? {
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
+          service: 'gmail',
           auth: { user: hostUser, pass: hostPass },
           connectionTimeout: 10000,
           greetingTimeout: 10000,
-          socketTimeout: 10000,
-          tls: { rejectUnauthorized: false },
-          family: 4
+          socketTimeout: 10000
         } : {
           host: process.env.EMAIL_HOST || 'localhost',
           port: parseInt(process.env.EMAIL_PORT) || 25,
@@ -362,18 +342,7 @@ const initializeEmailQueue = async () => {
 const sendAlertEmail = async (url, category, level, message) => {
   const time = new Date().toLocaleString();
   
-  let settings = {
-    critical_email: process.env.CRITICAL_EMAIL || 'alex.rivera@monitorpro.sre',
-    alerts_enabled: true
-  };
-  
-  const settingsPath = path.join(__dirname, '../../../../sre_settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...settings, ...JSON.parse(data) };
-    }
-  } catch (err) {}
+  const settings = loadSettings();
   
   const recipient = settings.critical_email;
   const subject = `[${level.toUpperCase()}] SRE Alert Triggered - ${url}`;

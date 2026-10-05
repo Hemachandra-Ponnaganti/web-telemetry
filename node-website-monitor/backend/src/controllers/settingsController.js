@@ -1,36 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const { loadSettings, saveSettingsToFile } = require('../config/settingsHelper');
 
-const settingsPath = path.join(__dirname, '../../../../sre_settings.json');
 const emailLogPath = path.join(__dirname, '../../../email_delivery.log');
 
 /**
  * Get SRE Settings & Email Delivery logs
  */
 const getSettings = async (req, res) => {
-  let settings = {
-    slack_webhook: '',
-    telegram_chat_id: '',
-    critical_email: '',
-    email_host_user: '',
-    email_host_password: '',
-    alert_email_recipients: '',
-    alerts_enabled: true
-  };
-
-  // Read sre_settings.json
-  try {
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...settings, ...JSON.parse(data) };
-      // Default alerts_enabled to true if not specified
-      if (settings.alerts_enabled === undefined) {
-        settings.alerts_enabled = true;
-      }
-    }
-  } catch (err) {
-    console.error('⚠️ Failed to read SRE settings file:', err.message);
-  }
+  const settings = loadSettings();
 
   // Parse email logs to serve as a history stream and chart data
   let logs = [];
@@ -91,21 +69,12 @@ const saveSettings = async (req, res) => {
   }
 
   try {
-    let settings = {};
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = JSON.parse(data);
-    }
-
-    // Merge settings
-    settings = { ...settings, ...newSettings };
-    
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 4), 'utf8');
+    const updatedSettings = saveSettingsToFile(newSettings);
     
     res.status(200).json({
       success: true,
       message: 'SRE credentials and alerts settings saved successfully.',
-      settings
+      settings: updatedSettings
     });
   } catch (error) {
     res.status(500).json({ error: `Failed to save SRE settings: ${error.message}` });
@@ -117,21 +86,8 @@ const saveSettings = async (req, res) => {
  */
 const testEmail = async (req, res) => {
   const nodemailer = require('nodemailer');
-  let settings = {
-    critical_email: 'alex.rivera@monitorpro.sre',
-    email_host_user: '',
-    email_host_password: '',
-    alerts_enabled: true
-  };
-
-  try {
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf8');
-      settings = { ...settings, ...JSON.parse(data) };
-    }
-  } catch (err) {
-    console.error('⚠️ Failed to read settings in testEmail:', err.message);
-  }
+  const axios = require('axios');
+  const settings = loadSettings();
 
   const recipient = settings.critical_email;
   const hostUser = settings.email_host_user;
@@ -164,6 +120,28 @@ const testEmail = async (req, res) => {
     fs.appendFileSync(emailLogPath, logMsg, 'utf-8');
   } catch (err) {
     console.error('⚠️ Failed to log test email:', err.message);
+  }
+
+  // Support sending test email via Resend API if API key is provided
+  if (settings.resend_api_key) {
+    try {
+      const fromEmail = settings.resend_from_email || 'onboarding@resend.dev';
+      const response = await axios.post('https://api.resend.com/emails', {
+        from: fromEmail,
+        to: recipient,
+        subject,
+        html
+      }, {
+        headers: {
+          'Authorization': `Bearer ${settings.resend_api_key}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      return res.status(200).json({ success: true, message: `Test alert email successfully dispatched to ${recipient} via Resend API.` });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: `Resend API Error: ${err.response?.data?.message || err.message}` });
+    }
   }
 
   if (hostUser && hostPass) {
