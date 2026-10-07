@@ -1,57 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import axios from 'axios';
 import {
   Globe, AlertTriangle, CheckCircle2, XCircle, Clock,
-  Calendar, RefreshCw, Bell, Shield, TrendingDown, Info
+  Calendar, RefreshCw, Bell, Shield, TrendingDown, Info, Loader2
 } from 'lucide-react';
 
-// ── Mock domain data — works immediately, no external API needed ─────────────
-const MOCK_DOMAINS = [
-  {
-    id: 1,
-    domain: 'wordpress.org',
-    registrar: 'Network Solutions',
-    registrationDate: '2000-01-15',
-    expiryDate: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    nameservers: ['ns1.wordpress.org', 'ns2.wordpress.org'],
-    autoRenew: true,
-  },
-  {
-    id: 2,
-    domain: 'example.com',
-    registrar: 'GoDaddy',
-    registrationDate: '2015-03-22',
-    expiryDate: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    nameservers: ['ns1.example.com', 'ns2.example.com'],
-    autoRenew: false,
-  },
-  {
-    id: 3,
-    domain: 'mysite.net',
-    registrar: 'Namecheap',
-    registrationDate: '2019-07-10',
-    expiryDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    nameservers: ['ns1.namecheap.com', 'ns2.namecheap.com'],
-    autoRenew: false,
-  },
-  {
-    id: 4,
-    domain: 'oldproject.io',
-    registrar: 'Dynadot',
-    registrationDate: '2018-11-01',
-    expiryDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    nameservers: ['ns1.dynadot.com', 'ns2.dynadot.com'],
-    autoRenew: false,
-  },
-  {
-    id: 5,
-    domain: 'clientsite.co',
-    registrar: 'Cloudflare Registrar',
-    registrationDate: '2021-06-18',
-    expiryDate: new Date(Date.now() + 200 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    nameservers: ['ns1.cloudflare.com', 'ns2.cloudflare.com'],
-    autoRenew: true,
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// ── Domain Expiry dashboard components ──────────────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const getDaysRemaining = (expiryDate) => {
@@ -91,14 +46,74 @@ const ALERT_HISTORY = [
 export default function DomainExpiryDashboard({ isDark }) {
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [showAlertHistory, setShowAlertHistory] = useState(false);
+  const [domains, setDomains] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get(`${API_BASE}/targets`);
+        const targets = res.data;
+        if (!targets || targets.length === 0) {
+          if (isMounted) setDomains([]);
+          return;
+        }
+
+        const uniqueDomains = new Set();
+        targets.forEach(t => {
+           try {
+             const url = new URL(t.url.startsWith('http') ? t.url : `https://${t.url}`);
+             const parts = url.hostname.split('.');
+             if (parts.length > 2) {
+                uniqueDomains.add(parts.slice(-2).join('.'));
+             } else {
+                uniqueDomains.add(url.hostname);
+             }
+           } catch(e) {}
+        });
+        
+        const domainList = Array.from(uniqueDomains);
+        const promises = domainList.map(async (dom, id) => {
+          try {
+            const wRes = await axios.get(`${API_BASE}/whois?domain=${dom}`);
+            const data = wRes.data;
+            return {
+              id: id + 1,
+              domain: dom,
+              registrar: data.registrar || 'Unknown',
+              registrationDate: data.createdDate || new Date().toISOString(),
+              expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
+              nameservers: data.nameservers || [],
+              autoRenew: false
+            };
+          } catch (e) {
+            return null;
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        if (isMounted) {
+          setDomains(results.filter(Boolean));
+        }
+      } catch (err) {
+        console.error("Failed to fetch domain data", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchData();
+    return () => { isMounted = false; };
+  }, []);
 
   const enriched = useMemo(() =>
-    MOCK_DOMAINS.map(d => {
+    domains.map(d => {
       const days = getDaysRemaining(d.expiryDate);
       const status = getStatus(days);
       return { ...d, daysRemaining: days, status };
     }),
-    []
+    [domains]
   );
 
   // Summary counts
@@ -133,6 +148,22 @@ export default function DomainExpiryDashboard({ isDark }) {
         <p className="text-xs text-slate-500 mt-1">Track registration and expiry dates for all monitored domains.</p>
       </div>
 
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-12 glass-card rounded-2xl border border-indigo-500/20">
+          <Loader2 className="h-8 w-8 text-indigo-400 animate-spin mb-4" />
+          <h3 className="text-slate-200 font-bold">Querying WHOIS records...</h3>
+          <p className="text-xs text-slate-500 mt-1">Fetching domain registry details. This might take a few seconds.</p>
+        </div>
+      )}
+
+      {!loading && domains.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 glass-card rounded-2xl border border-slate-700/50">
+          <Globe className="h-12 w-12 text-slate-600 mb-4" />
+          <h3 className="text-slate-300 font-bold">No domains found</h3>
+          <p className="text-xs text-slate-500 mt-1">Add websites to the catalog to start monitoring their domain expiry.</p>
+        </div>
+      )}
+
       {/* ── WARNING BANNERS ───────────────────────────────────────────── */}
       {warnings.length > 0 && (
         <div className="space-y-2">
@@ -157,8 +188,10 @@ export default function DomainExpiryDashboard({ isDark }) {
         </div>
       )}
 
-      {/* ── SUMMARY CARDS ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {!loading && domains.length > 0 && (
+        <>
+          {/* ── SUMMARY CARDS ─────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Domains',   value: summary.total,        color: 'text-slate-200',   bg: 'bg-dark-900/10 border-slate-800/40' },
           { label: 'Active',          value: summary.active,       color: 'text-emerald-400', bg: 'bg-emerald-500/5 border-emerald-500/15' },
@@ -355,6 +388,8 @@ export default function DomainExpiryDashboard({ isDark }) {
           ))}
         </div>
       </div>
+      </>
+      )}
 
     </div>
   );

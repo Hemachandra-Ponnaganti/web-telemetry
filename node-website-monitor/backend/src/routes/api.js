@@ -741,5 +741,57 @@ router.post('/image-metadata', async (req, res) => {
   res.status(200).json({ success: true, results });
 });
 
-module.exports = router;
+// ── Domain WHOIS / Expiry (NEW) ────────────────────────────────────────────────
+router.get('/whois', async (req, res) => {
+  const { domain } = req.query;
+  if (!domain) return res.status(400).json({ error: 'Domain is required.' });
+  
+  try {
+    const { whoisDomain } = require('whoiser');
+    const domainInfo = await whoisDomain(domain);
+    
+    // whoiser returns an object with keys for each WHOIS server queried.
+    // We try to find the first one that has 'Expiry Date' or 'Registrar'.
+    let bestResult = null;
+    let foundExpiry = null;
+    let foundCreated = null;
+    let foundRegistrar = null;
+    let nameservers = [];
+    
+    for (const key in domainInfo) {
+      const data = domainInfo[key];
+      if (data && typeof data === 'object') {
+        if (!bestResult) bestResult = data;
+        
+        const expiry = data['Expiry Date'] || data['Registry Expiry Date'] || data['expires'];
+        if (expiry && !foundExpiry) foundExpiry = expiry;
+        
+        const created = data['Created Date'] || data['Creation Date'] || data['created'];
+        if (created && !foundCreated) foundCreated = created;
+        
+        const registrar = data['Registrar'] || data['registrar'];
+        if (registrar && !foundRegistrar) foundRegistrar = registrar;
+        
+        const ns = data['Name Server'] || data['nserver'] || data['Name Servers'];
+        if (ns && nameservers.length === 0) {
+          if (Array.isArray(ns)) nameservers = ns;
+          else if (typeof ns === 'string') nameservers = ns.split(/[\s,]+/);
+        }
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      domain,
+      expiryDate: foundExpiry,
+      createdDate: foundCreated,
+      registrar: foundRegistrar,
+      nameservers: nameservers,
+      raw: bestResult
+    });
+  } catch (err) {
+    res.status(500).json({ error: `WHOIS lookup failed: ${err.message}` });
+  }
+});
 
+module.exports = router;
