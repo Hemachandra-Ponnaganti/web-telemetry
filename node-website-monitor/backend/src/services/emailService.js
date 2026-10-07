@@ -193,7 +193,7 @@ const processEmail = async (email) => {
       }
       
       console.log(`✉️ Sending via SMTP to: ${email.recipient}`);
-      const isGmail = hostUser.toLowerCase().includes('@gmail.com');
+      const isGmail = hostUser.toLowerCase().includes('@gmail.com') && !process.env.EMAIL_HOST;
       const transporter = nodemailer.createTransport(
         isGmail ? {
           service: 'gmail',
