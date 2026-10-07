@@ -212,8 +212,9 @@ const processEmail = async (email) => {
         }
       );
       
+      const fromAddress = process.env.EMAIL_FROM || settings.critical_email || hostUser;
       await transporter.sendMail({
-        from: hostUser,
+        from: fromAddress,
         to: email.recipient,
         subject: email.subject,
         html: email.html
