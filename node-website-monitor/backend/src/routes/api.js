@@ -820,5 +820,3 @@ router.get('/whois', async (req, res) => {
 });
 
 module.exports = router;
-/ /   F o r c e   R e n d e r   d e p l o y  
- 
