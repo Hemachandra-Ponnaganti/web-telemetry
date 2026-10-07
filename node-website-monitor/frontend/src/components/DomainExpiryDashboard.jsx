@@ -78,7 +78,8 @@ export default function DomainExpiryDashboard({ isDark, url }) {
             registrationDate: data.createdDate || new Date().toISOString(),
             expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
             nameservers: data.nameservers || [],
-            autoRenew: false
+            autoRenew: false,
+            raw: data.raw || null
           }]);
         }
       } catch (err) {
@@ -298,6 +299,18 @@ export default function DomainExpiryDashboard({ isDark, url }) {
                 ))}
               </div>
             </div>
+            
+            {/* Raw WHOIS Data Block */}
+            {selectedDomain.raw && (
+              <div className="mt-5 border-t border-slate-800/40 pt-4">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block mb-2">Raw WHOIS Record</span>
+                <div className="bg-slate-950 rounded-xl p-4 overflow-x-auto max-h-64 overflow-y-auto border border-slate-800/60 custom-scrollbar">
+                  <pre className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap break-words">
+                    {typeof selectedDomain.raw === 'string' ? selectedDomain.raw : JSON.stringify(selectedDomain.raw, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
