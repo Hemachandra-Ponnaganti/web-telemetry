@@ -780,6 +780,31 @@ router.get('/whois', async (req, res) => {
       }
     }
     
+    // RDAP Fallback if whoiser failed to get an expiry date
+    if (!foundExpiry) {
+      try {
+        const axios = require('axios');
+        const rdapUrl = `https://rdap.org/domain/${domain}`;
+        const rdapRes = await axios.get(rdapUrl, { timeout: 10000 });
+        const events = rdapRes.data.events || [];
+        
+        const expEvent = events.find(e => e.eventAction === 'expiration');
+        if (expEvent && expEvent.eventDate) foundExpiry = expEvent.eventDate;
+        
+        const creEvent = events.find(e => e.eventAction === 'registration');
+        if (creEvent && creEvent.eventDate) foundCreated = creEvent.eventDate;
+        
+        const entities = rdapRes.data.entities || [];
+        const registrarEntity = entities.find(e => e.roles && e.roles.includes('registrar'));
+        if (registrarEntity && registrarEntity.vcardArray) {
+           const fn = registrarEntity.vcardArray[1].find(item => item[0] === 'fn');
+           if (fn && fn[3]) foundRegistrar = fn[3];
+        }
+      } catch (err) {
+        console.error('RDAP Fallback failed:', err.message);
+      }
+    }
+    
     res.status(200).json({
       success: true,
       domain,
