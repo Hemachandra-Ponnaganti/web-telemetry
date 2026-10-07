@@ -4,8 +4,8 @@ import {
   Globe, AlertTriangle, CheckCircle2, XCircle, Clock,
   Calendar, RefreshCw, Bell, Shield, TrendingDown, Info, Loader2
 } from 'lucide-react';
+import { API_BASE } from '../apiConfig';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 // ── Domain Expiry dashboard components ──────────────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -43,69 +43,54 @@ const ALERT_HISTORY = [
 ];
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function DomainExpiryDashboard({ isDark }) {
+export default function DomainExpiryDashboard({ isDark, url }) {
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [showAlertHistory, setShowAlertHistory] = useState(false);
   const [domains, setDomains] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!url) return;
     let isMounted = true;
+    
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${API_BASE}/targets`);
-        const targets = res.data;
-        if (!targets || targets.length === 0) {
-          if (isMounted) setDomains([]);
-          return;
-        }
-
-        const uniqueDomains = new Set();
-        targets.forEach(t => {
-           try {
-             const url = new URL(t.url.startsWith('http') ? t.url : `https://${t.url}`);
-             const parts = url.hostname.split('.');
-             if (parts.length > 2) {
-                uniqueDomains.add(parts.slice(-2).join('.'));
-             } else {
-                uniqueDomains.add(url.hostname);
-             }
-           } catch(e) {}
-        });
-        
-        const domainList = Array.from(uniqueDomains);
-        const promises = domainList.map(async (dom, id) => {
-          try {
-            const wRes = await axios.get(`${API_BASE}/whois?domain=${dom}`);
-            const data = wRes.data;
-            return {
-              id: id + 1,
-              domain: dom,
-              registrar: data.registrar || 'Unknown',
-              registrationDate: data.createdDate || new Date().toISOString(),
-              expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
-              nameservers: data.nameservers || [],
-              autoRenew: false
-            };
-          } catch (e) {
-            return null;
+        let baseDomain = '';
+        try {
+          const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+          const parts = parsed.hostname.split('.');
+          if (parts.length > 2) {
+             baseDomain = parts.slice(-2).join('.');
+          } else {
+             baseDomain = parsed.hostname;
           }
-        });
+        } catch(e) { baseDomain = url; }
         
-        const results = await Promise.all(promises);
+        const wRes = await axios.get(`${API_BASE}/whois?domain=${baseDomain}`);
+        const data = wRes.data;
+        
         if (isMounted) {
-          setDomains(results.filter(Boolean));
+          setDomains([{
+            id: 1,
+            domain: baseDomain,
+            registrar: data.registrar || 'Unknown',
+            registrationDate: data.createdDate || new Date().toISOString(),
+            expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
+            nameservers: data.nameservers || [],
+            autoRenew: false
+          }]);
         }
       } catch (err) {
         console.error("Failed to fetch domain data", err);
+        if (isMounted) setDomains([]);
       } finally {
         if (isMounted) setLoading(false);
       }
     };
     fetchData();
     return () => { isMounted = false; };
-  }, []);
+  }, [url]);
 
   const enriched = useMemo(() =>
     domains.map(d => {
@@ -138,9 +123,9 @@ export default function DomainExpiryDashboard({ isDark }) {
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
           <Globe className="w-40 h-40 text-indigo-500" />
         </div>
-        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">DOMAIN EXPIRY MONITORING</span>
+        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">DOMAIN DETAILS</span>
         <h2 className="text-xl font-extrabold text-slate-200 tracking-tight flex items-center gap-2">
-          Domain Expiry Dashboard
+          Domain Details
           <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
             {summary.total} Domains
           </span>

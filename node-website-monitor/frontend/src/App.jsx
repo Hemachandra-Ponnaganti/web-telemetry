@@ -734,7 +734,7 @@ export default function App() {
                 { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
                 { id: 'accessibility', label: 'Accessibility', icon: Eye },
                 { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
-                { id: 'domain_expiry', label: 'Domain Expiry', icon: CalendarClock },
+                { id: 'domain_expiry', label: 'Domain Details', icon: CalendarClock },
                 { id: 'email_alerts', label: 'Email Alerts', icon: Mail },
                 { id: 'settings', label: 'Gmail & Alerts', icon: Settings },
               ].map(({ id, label, icon: Icon }) => (
@@ -859,7 +859,7 @@ export default function App() {
                 ) : activeTab === 'email_alerts' ? (
                   <EmailAlertSettings siteUrl={safeStats?.url || url} showToast={showToast} />
                 ) : activeTab === 'domain_expiry' ? (
-                  <DomainExpiryDashboard isDark={isDark} />
+                  <DomainExpiryDashboard isDark={isDark} url={safeStats?.url || url} />
                 ) : (loading && !safeStats) || initializing ? (
                   <div className="py-24 text-center animate-fade-in-up">
                     <RefreshCw className="h-8 w-8 text-indigo-500 rotate-infinite mx-auto mb-4" />
