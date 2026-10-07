@@ -805,6 +805,38 @@ router.get('/whois', async (req, res) => {
       }
     }
     
+    // Check for nameserver changes
+    try {
+      const { ScannedWebsite, Alert } = require('../models/Schemas');
+      const { sendAlertEmailToWebsite } = require('../services/emailService');
+      
+      const website = await ScannedWebsite.findOne({ url: { $regex: new RegExp(domain, 'i') } });
+      
+      if (website && nameservers && nameservers.length > 0) {
+        const sortedNewNs = [...nameservers].map(n => n.toLowerCase()).sort();
+        const sortedOldNs = (website.lastNameservers || []).map(n => n.toLowerCase()).sort();
+        
+        if (website.lastNameservers && website.lastNameservers.length > 0) {
+          const isDifferent = sortedNewNs.join(',') !== sortedOldNs.join(',');
+          if (isDifferent) {
+            const message = `DNS Alert: Nameservers for ${domain} have been changed from [${sortedOldNs.join(', ')}] to [${sortedNewNs.join(', ')}].`;
+            await Alert.create({
+              url: website.url,
+              category: 'domain',
+              level: 'warning',
+              message
+            });
+            await sendAlertEmailToWebsite(website.url, 'domain', 'warning', message);
+          }
+        }
+        
+        // Update the lastNameservers
+        await ScannedWebsite.findOneAndUpdate({ _id: website._id }, { lastNameservers: nameservers });
+      }
+    } catch (err) {
+      console.error('Nameserver change detection failed:', err.message);
+    }
+    
     res.status(200).json({
       success: true,
       domain,

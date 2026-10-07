@@ -442,7 +442,8 @@ const scannedWebsiteSchema = new mongoose.Schema({
   isFavorite: { type: Boolean, default: false },
   analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' },
   lastSnapshotHash: { type: String },
-  lastCodeHash: { type: String }
+  lastCodeHash: { type: String },
+  lastNameservers: [{ type: String }]
 });
 
 const RealEmailAlertHistory = mongoose.model('RealEmailAlertHistory', emailAlertHistorySchema);
