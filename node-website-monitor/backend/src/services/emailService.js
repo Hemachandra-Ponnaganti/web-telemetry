@@ -162,6 +162,7 @@ const processEmail = async (email) => {
       const response = await axios.post('https://api.resend.com/emails', {
         from: fromEmail,
         to: email.recipient,
+        cc: email.cc,
         subject: email.subject,
         html: email.html
       }, {
@@ -216,6 +217,7 @@ const processEmail = async (email) => {
       await transporter.sendMail({
         from: fromAddress,
         to: email.recipient,
+        cc: email.cc,
         subject: email.subject,
         html: email.html
       });
@@ -270,7 +272,7 @@ const processQueue = async () => {
 /**
  * Enqueue a new email and run the background queue processor.
  */
-const enqueueEmailAlert = async ({ url, recipient, category, level, subject, message, html }) => {
+const enqueueEmailAlert = async ({ url, recipient, cc, category, level, subject, message, html }) => {
   const { EmailAlertHistory } = require('../models/Schemas');
   
   try {
@@ -294,6 +296,7 @@ const enqueueEmailAlert = async ({ url, recipient, category, level, subject, mes
       category,
       level,
       html,
+      cc,
       attempts: 0
     });
     
@@ -328,6 +331,7 @@ const initializeEmailQueue = async () => {
         category: doc.alertType,
         level: doc.level,
         html,
+        cc: undefined,
         attempts: 0
       });
     }
@@ -425,7 +429,9 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
       if (config.alertFrequency === 'weekly' && hoursSince < 168) return;
     }
     
-    const recipient = config.alertEmail;
+    const emails = config.alertEmail.split(',').map(e => e.trim()).filter(Boolean);
+    const recipient = emails[0];
+    const cc = emails.slice(1).join(', ') || undefined;
     
     const allIssues = [{ category, level, message }, ...extraIssues];
     const hasMultiple = allIssues.length > 1;
@@ -491,6 +497,7 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
     await enqueueEmailAlert({
       url,
       recipient,
+      cc,
       category,
       level: topLevel,
       subject,

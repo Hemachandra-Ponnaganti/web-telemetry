@@ -609,6 +609,7 @@ const auditWordPressSite = async (url, htmlContent = '') => {
       level: 'warning',
       message: `Links warning: ${auditReport.brokenLinks.length} broken links or missing resources detected on crawled paths.`
     });
+    await sendAlertEmail(url, 'wordpress', 'warning', `Links warning: ${auditReport.brokenLinks.length} broken links or missing resources detected on crawled paths.`);
   }
 
   // 10. Audit forms penalties
