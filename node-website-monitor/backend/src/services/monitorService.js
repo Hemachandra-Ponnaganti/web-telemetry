@@ -797,8 +797,22 @@ const compileStats = async (url) => {
   const { WordPressMonitor, Alert } = require('../models/Schemas');
   
   // Normalize protocol for real-time consistency
-  const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
-  const filter = { url: normalizedUrl };
+  let normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+  
+  // Create variations to catch trailing slashes and www/non-www
+  const base = normalizedUrl.endsWith('/') ? normalizedUrl.slice(0, -1) : normalizedUrl;
+  const urlsToMatch = [base, `${base}/`];
+  
+  const hasWww = base.includes('://www.');
+  if (hasWww) {
+    const nonWww = base.replace('://www.', '://');
+    urlsToMatch.push(nonWww, `${nonWww}/`);
+  } else {
+    const withWww = base.replace('://', '://www.');
+    urlsToMatch.push(withWww, `${withWww}/`);
+  }
+  
+  const filter = { url: { $in: urlsToMatch } };
   
   let history = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(30);
   
