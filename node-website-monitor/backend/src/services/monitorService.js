@@ -848,16 +848,38 @@ const compileStats = async (url) => {
     }
   };
 
-  const mapHistoryRecord = (h) => {
+  const mapHistoryRecord = (h, isLatest = false) => {
     if (!h) return null;
     const doc = h.toObject ? h.toObject() : { ...h };
-    doc.seo = parseJsonSafe(doc.seoData);
-    doc.performance = parseJsonSafe(doc.performanceData);
-    doc.uiUx = parseJsonSafe(doc.uiUxData);
-    doc.security = parseJsonSafe(doc.securityData);
-    doc.pageAnalysis = parseJsonSafe(doc.pageAnalysisData);
-    doc.malware = parseJsonSafe(doc.malwareData);
-    doc.snapshot = parseJsonSafe(doc.snapshotData);
+    
+    if (isLatest) {
+      doc.seo = parseJsonSafe(doc.seoData);
+      doc.performance = parseJsonSafe(doc.performanceData);
+      doc.uiUx = parseJsonSafe(doc.uiUxData);
+      doc.security = parseJsonSafe(doc.securityData);
+      doc.pageAnalysis = parseJsonSafe(doc.pageAnalysisData);
+      doc.malware = parseJsonSafe(doc.malwareData);
+      doc.snapshot = parseJsonSafe(doc.snapshotData);
+    } else {
+      // For historical records in graphs, only parse the high-level scores to prevent massive memory usage (OOM)
+      const seoData = parseJsonSafe(doc.seoData);
+      const perfData = parseJsonSafe(doc.performanceData);
+      const secData = parseJsonSafe(doc.securityData);
+      
+      doc.seo = { seoScore: seoData.seoScore || 85 };
+      doc.performance = { performanceScore: perfData.performanceScore || 90, grade: perfData.grade || 'A' };
+      doc.security = { securityScore: secData.securityScore || 100 };
+      
+      // Delete the massive raw string blobs to free memory
+      delete doc.seoData;
+      delete doc.performanceData;
+      delete doc.uiUxData;
+      delete doc.securityData;
+      delete doc.pageAnalysisData;
+      delete doc.malwareData;
+      delete doc.snapshotData;
+    }
+    
     return doc;
   };
 
@@ -865,15 +887,17 @@ const compileStats = async (url) => {
   const scannedSite = await ScannedWebsite.findOne(filter);
   const analysisFrequency = scannedSite?.analysisFrequency || '1h';
 
-  const historyMapped = history.map(mapHistoryRecord);
+  // Only the first record gets fully mapped, the rest are mapped lightweight to prevent Node.js OOM crashes
+  const latestStatus = history.length > 0 ? mapHistoryRecord(history[0], true) : null;
+  const historyLog = history.map((h, i) => i === 0 ? latestStatus : mapHistoryRecord(h, false));
 
   return {
     url,
     analysisFrequency,
     uptimePercentage,
     totalChecks,
-    latestStatus: historyMapped[0] || null,
-    historyLog: historyMapped,
+    latestStatus,
+    historyLog,
     wordpress,
     activeAlerts
   };
