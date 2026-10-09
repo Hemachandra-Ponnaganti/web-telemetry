@@ -787,6 +787,25 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
 
   // Save full audit report log in history collection
   const log = await MonitorHistory.create(auditReport);
+
+  // Auto-prune older scans (prune 50% if total scans exceed 15) to keep DB/memory lightweight
+  try {
+    const siteScansCount = await MonitorHistory.countDocuments({ url });
+    if (siteScansCount > 15) {
+      const pruneCount = Math.floor(siteScansCount * 0.5);
+      const oldestScans = await MonitorHistory.find({ url })
+        .sort({ checkedAt: 1 })
+        .limit(pruneCount);
+      const idsToDelete = (Array.isArray(oldestScans) ? oldestScans : []).map(s => s._id).filter(Boolean);
+      if (idsToDelete.length > 0) {
+        await MonitorHistory.deleteMany({ _id: { $in: idsToDelete } });
+        console.log(`🧹 [Auto-Prune 50%] Deleted ${idsToDelete.length} older scans for ${url}`);
+      }
+    }
+  } catch (pruneErr) {
+    console.warn('⚠️ Auto-prune post-audit failed:', pruneErr.message);
+  }
+
   return log;
 };
 
@@ -799,7 +818,7 @@ const compileStats = async (url) => {
   // Normalize protocol for real-time consistency
   let normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
   
-  // Create variations to catch trailing slashes and www/non-www
+  // Create variations to catch trailing slashes, www/non-www, and http/https
   const base = normalizedUrl.endsWith('/') ? normalizedUrl.slice(0, -1) : normalizedUrl;
   const urlsToMatch = [base, `${base}/`];
   
@@ -811,26 +830,60 @@ const compileStats = async (url) => {
     const withWww = base.replace('://', '://www.');
     urlsToMatch.push(withWww, `${withWww}/`);
   }
+
+  // Cross-match http and https
+  const currentList = [...urlsToMatch];
+  for (const u of currentList) {
+    if (u.startsWith('https://')) {
+      urlsToMatch.push(u.replace('https://', 'http://'));
+    } else if (u.startsWith('http://')) {
+      urlsToMatch.push(u.replace('http://', 'https://'));
+    }
+  }
   
   const filter = { url: { $in: urlsToMatch } };
   
-  let history = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(30);
+  // 1. Calculate count using countDocuments (0 documents transferred to Node heap)
+  let totalChecks = await MonitorHistory.countDocuments(filter);
+
+  // 2. Auto-prune older scans (prune 50% if site has more than 10 scans)
+  if (totalChecks > 10) {
+    try {
+      const pruneCount = Math.floor(totalChecks * 0.5);
+      const oldestScans = await MonitorHistory.find(filter)
+        .sort({ checkedAt: 1 })
+        .limit(pruneCount);
+      const idsToDelete = (Array.isArray(oldestScans) ? oldestScans : []).map(s => s._id).filter(Boolean);
+      if (idsToDelete.length > 0) {
+        await MonitorHistory.deleteMany({ _id: { $in: idsToDelete } });
+        console.log(`🧹 [Auto-Prune 50%] Pruned ${idsToDelete.length} older scans for ${normalizedUrl}`);
+        totalChecks = await MonitorHistory.countDocuments(filter);
+      }
+    } catch (pruneErr) {
+      console.warn('⚠️ Auto-prune during compileStats failed:', pruneErr.message);
+    }
+  }
+
+  const successfulChecks = await MonitorHistory.countDocuments({ ...filter, isUp: true });
+  const uptimePercentage = totalChecks > 0 ? parseFloat(((successfulChecks / totalChecks) * 100).toFixed(2)) : 100;
+  
+  // 3. Fetch latest record with full details
+  let latestRaw = await MonitorHistory.findOne(filter).sort({ checkedAt: -1 });
   
   // If no history is stored for this target URL, execute a real-time SRE audit on-the-fly
-  if (history.length === 0) {
+  if (!latestRaw) {
     console.log(`🔍 [Real-Time Audit] No previous records found for ${normalizedUrl}. Launching SRE crawler...`);
     try {
       await checkWebsiteStatus(normalizedUrl);
-      history = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(30);
+      latestRaw = await MonitorHistory.findOne(filter).sort({ checkedAt: -1 });
     } catch (err) {
       console.warn(`⚠️ [Real-Time Audit] On-the-fly live check failed: ${err.message}`);
     }
   }
   
-  const allChecks = await MonitorHistory.find(filter);
-  const totalChecks = allChecks.length;
-  const successfulChecks = allChecks.filter(h => h.isUp).length;
-  const uptimePercentage = totalChecks > 0 ? parseFloat(((successfulChecks / totalChecks) * 100).toFixed(2)) : 100;
+  // 4. Fetch up to 15 recent scans for graphs and historical log
+  let pastHistory = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(15);
+  if (!Array.isArray(pastHistory)) pastHistory = [];
   
   const wordpressDoc = await WordPressMonitor.findOne(filter);
   // Always return a wordpress object so the frontend can distinguish detected vs not
@@ -860,15 +913,20 @@ const compileStats = async (url) => {
       doc.pageAnalysis = parseJsonSafe(doc.pageAnalysisData);
       doc.malware = parseJsonSafe(doc.malwareData);
       doc.snapshot = parseJsonSafe(doc.snapshotData);
+      // Clean up massive strings so they don't bloat JSON response
+      delete doc.snapshotData;
+      delete doc.pageAnalysisData;
     } else {
       // For historical records in graphs, only parse the high-level scores to prevent massive memory usage (OOM)
       const seoData = parseJsonSafe(doc.seoData);
       const perfData = parseJsonSafe(doc.performanceData);
       const secData = parseJsonSafe(doc.securityData);
+      const uiData = parseJsonSafe(doc.uiUxData);
       
       doc.seo = { seoScore: seoData.seoScore || 85 };
       doc.performance = { performanceScore: perfData.performanceScore || 90, grade: perfData.grade || 'A' };
       doc.security = { securityScore: secData.securityScore || 100 };
+      doc.uiUx = { uiHealthScore: uiData.uiHealthScore || 85 };
       
       // Delete the massive raw string blobs to free memory
       delete doc.seoData;
@@ -887,9 +945,9 @@ const compileStats = async (url) => {
   const scannedSite = await ScannedWebsite.findOne(filter);
   const analysisFrequency = scannedSite?.analysisFrequency || '1h';
 
-  // Only the first record gets fully mapped, the rest are mapped lightweight to prevent Node.js OOM crashes
-  const latestStatus = history.length > 0 ? mapHistoryRecord(history[0], true) : null;
-  const historyLog = history.map((h, i) => i === 0 ? latestStatus : mapHistoryRecord(h, false));
+  // Map the latest record with full details, and past records lightweight
+  const latestStatus = latestRaw ? mapHistoryRecord(latestRaw, true) : null;
+  const historyLog = pastHistory.map((h, i) => (i === 0 && latestStatus) ? latestStatus : mapHistoryRecord(h, false));
 
   return {
     url,

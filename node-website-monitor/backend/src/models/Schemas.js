@@ -176,6 +176,26 @@ const RealAlert = mongoose.model('RealAlert', alertSchema);
 
 const isConnected = () => mongoose.connection.readyState === 1;
 
+const matchUrlQuery = (itemUrl, queryUrl) => {
+  if (!queryUrl) return true;
+  if (!itemUrl) return false;
+  if (typeof queryUrl === 'string') {
+    if (itemUrl === queryUrl) return true;
+    const cleanItem = itemUrl.replace(/\/+$/, '').toLowerCase();
+    const cleanQuery = queryUrl.replace(/\/+$/, '').toLowerCase();
+    return cleanItem === cleanQuery;
+  }
+  if (typeof queryUrl === 'object' && queryUrl.$in && Array.isArray(queryUrl.$in)) {
+    if (queryUrl.$in.includes(itemUrl)) return true;
+    const cleanItem = itemUrl.replace(/\/+$/, '').toLowerCase();
+    return queryUrl.$in.some(u => typeof u === 'string' && u.replace(/\/+$/, '').toLowerCase() === cleanItem);
+  }
+  if (queryUrl instanceof RegExp) {
+    return queryUrl.test(itemUrl);
+  }
+  return itemUrl === queryUrl;
+};
+
 // ── 1. MonitorHistory Mock Wrapper ───────────────────────────────────────────
 const MonitorHistory = {
   create: async (data) => {
@@ -205,15 +225,63 @@ const MonitorHistory = {
     const filterData = () => {
       let res = inMemoryHistory;
       if (query.url) {
-        res = res.filter(item => item.url === query.url);
+        res = res.filter(item => matchUrlQuery(item.url, query.url));
       }
       return res;
+    };
+    const sortData = (data, sortQuery) => {
+      let sorted = [...data];
+      if (sortQuery && sortQuery.checkedAt) {
+        const dir = sortQuery.checkedAt < 0 ? -1 : 1;
+        sorted.sort((a, b) => dir * (new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0)));
+      }
+      return sorted;
     };
     return {
       sort: (sortQuery) => ({
         limit: async (lim) => {
           if (isConn) return await RealMonitorHistory.find(query).sort(sortQuery).limit(lim);
-          return filterData().slice(0, lim);
+          return sortData(filterData(), sortQuery).slice(0, lim);
+        },
+        select: (sel) => ({
+          limit: async (lim) => {
+            if (isConn) return await RealMonitorHistory.find(query).sort(sortQuery).limit(lim).select(sel);
+            return sortData(filterData(), sortQuery).slice(0, lim);
+          },
+          lean: () => ({
+            limit: async (lim) => {
+              if (isConn) return await RealMonitorHistory.find(query).sort(sortQuery).limit(lim).select(sel).lean();
+              return sortData(filterData(), sortQuery).slice(0, lim);
+            }
+          })
+        }),
+        lean: () => ({
+          limit: async (lim) => {
+            if (isConn) return await RealMonitorHistory.find(query).sort(sortQuery).limit(lim).lean();
+            return sortData(filterData(), sortQuery).slice(0, lim);
+          }
+        }),
+        then: async (resolve) => {
+          if (isConn) return resolve(await RealMonitorHistory.find(query).sort(sortQuery));
+          return resolve(sortData(filterData(), sortQuery));
+        }
+      }),
+      select: (sel) => ({
+        sort: (sortQuery) => ({
+          limit: async (lim) => {
+            if (isConn) return await RealMonitorHistory.find(query).sort(sortQuery).limit(lim).select(sel);
+            return sortData(filterData(), sortQuery).slice(0, lim);
+          }
+        }),
+        lean: () => ({
+          then: async (resolve) => {
+            if (isConn) return resolve(await RealMonitorHistory.find(query).select(sel).lean());
+            return resolve(filterData());
+          }
+        }),
+        then: async (resolve) => {
+          if (isConn) return resolve(await RealMonitorHistory.find(query).select(sel));
+          return resolve(filterData());
         }
       }),
       then: async (resolve) => {
@@ -227,20 +295,46 @@ const MonitorHistory = {
     const filterData = () => {
       let res = inMemoryHistory;
       if (query.url) {
-        res = res.filter(item => item.url === query.url);
+        res = res.filter(item => matchUrlQuery(item.url, query.url));
       }
-      return res[0] || null;
+      return res;
+    };
+    const sortData = (data, sortQuery) => {
+      let sorted = [...data];
+      if (sortQuery && sortQuery.checkedAt) {
+        const dir = sortQuery.checkedAt < 0 ? -1 : 1;
+        sorted.sort((a, b) => dir * (new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0)));
+      }
+      return sorted;
     };
     return {
       sort: (sortQuery) => ({
+        select: (sel) => ({
+          lean: async () => {
+            if (isConn) return await RealMonitorHistory.findOne(query).sort(sortQuery).select(sel).lean();
+            return sortData(filterData(), sortQuery)[0] || null;
+          },
+          then: async (resolve) => {
+            if (isConn) return resolve(await RealMonitorHistory.findOne(query).sort(sortQuery).select(sel));
+            return resolve(sortData(filterData(), sortQuery)[0] || null);
+          }
+        }),
+        lean: async () => {
+          if (isConn) return await RealMonitorHistory.findOne(query).sort(sortQuery).lean();
+          return sortData(filterData(), sortQuery)[0] || null;
+        },
         then: async (resolve) => {
           if (isConn) return resolve(await RealMonitorHistory.findOne(query).sort(sortQuery));
-          return resolve(filterData());
+          return resolve(sortData(filterData(), sortQuery)[0] || null);
         }
       }),
+      lean: async () => {
+        if (isConn) return await RealMonitorHistory.findOne(query).lean();
+        return filterData()[0] || null;
+      },
       then: async (resolve) => {
         if (isConn) return resolve(await RealMonitorHistory.findOne(query));
-        return resolve(filterData());
+        return resolve(filterData()[0] || null);
       }
     };
   },
@@ -248,7 +342,10 @@ const MonitorHistory = {
     if (isConnected()) return await RealMonitorHistory.countDocuments(query);
     let res = inMemoryHistory;
     if (query.url) {
-      res = res.filter(item => item.url === query.url);
+      res = res.filter(item => matchUrlQuery(item.url, query.url));
+    }
+    if (query.isUp !== undefined) {
+      res = res.filter(item => item.isUp === query.isUp);
     }
     return res.length;
   },
@@ -256,7 +353,12 @@ const MonitorHistory = {
     if (isConnected()) return await RealMonitorHistory.deleteMany(query);
     const before = inMemoryHistory.length;
     inMemoryHistory = inMemoryHistory.filter(item => {
-      if (query.url && item.url === query.url) return false;
+      if (query._id && typeof query._id === 'object' && query._id.$in && Array.isArray(query._id.$in)) {
+        return !query._id.$in.map(String).includes(String(item._id));
+      }
+      if (query.url) {
+        return !matchUrlQuery(item.url, query.url);
+      }
       return true;
     });
     saveToDisk();
@@ -268,7 +370,7 @@ const MonitorHistory = {
 const WordPressMonitor = {
   findOne: async (query = {}) => {
     if (isConnected()) return await RealWordPressMonitor.findOne(query);
-    return inMemoryWordPress.find(wp => wp.url === query.url) || null;
+    return inMemoryWordPress.find(wp => matchUrlQuery(wp.url, query.url)) || null;
   },
   create: async (data) => {
     if (isConnected()) return await RealWordPressMonitor.create(data);
@@ -324,7 +426,7 @@ const Alert = {
     const filterData = () => {
       let res = inMemoryAlerts;
       if (query.url) {
-        res = res.filter(item => item.url === query.url);
+        res = res.filter(item => matchUrlQuery(item.url, query.url));
       }
       if (query.resolved !== undefined) {
         res = res.filter(item => item.resolved === query.resolved);
@@ -566,7 +668,7 @@ const ScannedWebsite = {
     const filterData = () => {
       let res = [...inMemoryScannedWebsites];
       if (query.url) {
-        res = res.filter(item => item.url === query.url);
+        res = res.filter(item => matchUrlQuery(item.url, query.url));
       }
       return res;
     };
@@ -599,11 +701,11 @@ const ScannedWebsite = {
   },
   findOne: async (query = {}) => {
     if (isConnected()) return await RealScannedWebsite.findOne(query);
-    return inMemoryScannedWebsites.find(w => w.url === query.url) || null;
+    return inMemoryScannedWebsites.find(w => matchUrlQuery(w.url, query.url)) || null;
   },
   findOneAndUpdate: async (query, updateData, options = {}) => {
     if (isConnected()) return await RealScannedWebsite.findOneAndUpdate(query, updateData, options);
-    let index = inMemoryScannedWebsites.findIndex(w => w.url === query.url);
+    let index = inMemoryScannedWebsites.findIndex(w => matchUrlQuery(w.url, query.url));
     if (index !== -1) {
       let updatedFields = { ...updateData };
       if (updateData.$inc) {
