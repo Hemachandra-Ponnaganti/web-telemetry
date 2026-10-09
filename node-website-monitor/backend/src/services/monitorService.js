@@ -938,11 +938,44 @@ const startUptimeScheduler = (io) => {
           else if (config.reportFrequency === '72h') frequencyHours = 72;
           else if (config.reportFrequency === '7d') frequencyHours = 168;
 
-          const requiredIntervalMs = frequencyHours * 60 * 60 * 1000;
-          const lastSentTime = config.lastReportSent ? new Date(config.lastReportSent).getTime() : 0;
           const now = Date.now();
+          const currentDate = new Date(now);
+          const currentHour = currentDate.getHours();
+          const currentDay = currentDate.getDay(); // 0 is Sunday
+          let shouldSend = false;
 
-          if (now - lastSentTime >= requiredIntervalMs) {
+          if (!config.lastReportSent) {
+            // If never sent before, align to the first available slot
+            if (frequencyHours === 12) {
+              shouldSend = (currentHour === 0 || currentHour === 12);
+            } else if (frequencyHours === 168) {
+              shouldSend = (currentDay === 0 && currentHour === 0);
+            } else {
+              shouldSend = (currentHour === 0);
+            }
+          } else {
+            const lastSentDate = new Date(config.lastReportSent);
+            
+            lastSentDate.setHours(0, 0, 0, 0);
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            
+            const daysDiff = Math.round((today.getTime() - lastSentDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (frequencyHours === 12) {
+              const hoursSinceLastSent = (now - new Date(config.lastReportSent).getTime()) / (1000 * 60 * 60);
+              shouldSend = (currentHour === 0 || currentHour === 12) && hoursSinceLastSent >= 10;
+            } else if (frequencyHours === 168) {
+              // 7d (Weekly): Send ONLY on Sunday at 12 AM, ensure at least 1 day has passed to avoid duplicates
+              shouldSend = (currentDay === 0 && currentHour === 0) && (daysDiff >= 1);
+            } else {
+              // 24h, 48h, 72h: Send at 12 AM when the required days have passed
+              const requiredDays = frequencyHours / 24;
+              shouldSend = (currentHour === 0) && (daysDiff >= requiredDays);
+            }
+          }
+
+          if (shouldSend) {
             console.log(`📊 Generating ${config.reportFrequency} periodic report for ${site.url} to ${config.reportEmail}...`);
             const stats = await compileStats(site.url);
             await sendPeriodicReportEmail(site.url, config.reportEmail, stats);

@@ -753,6 +753,38 @@ const analyzeSeo = async (url, htmlContent = '') => {
     }
   }
 
+  // Fetch keywords for discovered internal URLs
+  const fetchKeywordsForUrls = async (links, limit = 15) => {
+    const keywordData = {};
+    const urlsToCheck = Array.from(links).slice(0, limit);
+    const tasks = urlsToCheck.map(async (link) => {
+      try {
+        const resp = await axios.get(link, { 
+          timeout: 2500, 
+          httpsAgent, 
+          validateStatus: () => true 
+        });
+        if (resp.status === 200 && typeof resp.data === 'string') {
+          const match = resp.data.match(/<meta\s+[^>]*name=["']keywords["'][^>]*content=["']([^"']*)["']/i) ||
+                        resp.data.match(/<meta\s+[^>]*content=["']([^"']*)["'][^>]*name=["']keywords["']/i);
+          if (match && match[1]) {
+            keywordData[link] = match[1].trim();
+          } else {
+            keywordData[link] = '';
+          }
+        } else {
+          keywordData[link] = '';
+        }
+      } catch (err) {
+        keywordData[link] = '';
+      }
+    });
+    await Promise.all(tasks);
+    return keywordData;
+  };
+
+  const pageKeywordsData = await fetchKeywordsForUrls(discoveredInternalUrls, 25);
+
   // Site-wide URL Quality evaluation for all discovered page URLs
   const pagesUrlEvaluations = [];
   discoveredInternalUrls.forEach(pageUrl => {
@@ -761,7 +793,8 @@ const analyzeSeo = async (url, htmlContent = '') => {
       pagesUrlEvaluations.push({
         pageUrl,
         pageLabel: pageUrl.replace(/^https?:\/\/[^/]+/, '') || '/',
-        urlQuality: evaluated
+        urlQuality: evaluated,
+        keywords: pageKeywordsData[pageUrl] !== undefined ? pageKeywordsData[pageUrl] : 'Not checked'
       });
     } catch (err) {}
   });

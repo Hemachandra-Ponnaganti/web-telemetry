@@ -869,7 +869,8 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
             pageUrl: p.pageUrl,
             pageLabel: p.pageLabel || p.pageUrl.replace(/^https?:\/\/[^/]+/, '') || '/',
             pageTitle: p.pageTitle || '',
-            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl)
+            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl),
+            keywords: p.keywords || ''
           });
         }
       });
@@ -883,7 +884,8 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
             pageUrl: p.pageUrl,
             pageLabel: p.pageLabel || p.pageUrl.replace(/^https?:\/\/[^/]+/, '') || '/',
             pageTitle: p.pageTitle || '',
-            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl)
+            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl),
+            keywords: p.keywords || ''
           });
         }
       });
@@ -910,7 +912,8 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
             pageUrl: p.pageUrl,
             pageLabel: p.pageLabel || p.pageUrl.replace(/^https?:\/\/[^/]+/, '') || '/',
             pageTitle: p.pageTitle || '',
-            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl)
+            urlQuality: p.urlQuality || evaluateUrlQualityClient(p.pageUrl),
+            keywords: p.keywords || ''
           });
         }
       });
@@ -922,12 +925,13 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
         pageUrl: activeTargetUrl,
         pageLabel: '/',
         pageTitle: title?.text || '',
-        urlQuality: baseEvaluatedQuality
+        urlQuality: baseEvaluatedQuality,
+        keywords: keywordsMeta?.text || ''
       });
     }
 
     return Array.from(pageMap.values());
-  }, [liveSiteWideData, crawlData, safeSeoData, activeTargetUrl, baseEvaluatedQuality, title]);
+  }, [liveSiteWideData, crawlData, safeSeoData, activeTargetUrl, baseEvaluatedQuality, title, keywordsMeta]);
 
   // Aggregate Site-Wide Statistics across all discovered pages
   const siteWideSummary = useMemo(() => {
@@ -2198,13 +2202,14 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
                     <th className="py-3 px-3 text-center">Length</th>
                     <th className="py-3 px-3 text-center">Quality Score</th>
                     <th className="py-3 px-3">Architectural Traits</th>
+                    <th className="py-3 px-3 text-center">Meta Keywords</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {filteredAndSortedPages.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
                         <FolderTree className="h-8 w-8 text-slate-600 mx-auto mb-2" />
                         <p className="font-bold text-slate-400">No pages matched this filter query.</p>
                         <p className="text-[11px] text-slate-500 mt-1">Try selecting "All" or clearing the search box.</p>
@@ -2310,6 +2315,15 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
                                   </span>
                                 )}
                               </div>
+                            </td>
+
+                            {/* Meta Keywords */}
+                            <td className="py-3 px-3 text-center text-[10px] text-slate-400 max-w-[120px] truncate" title={p.keywords || 'None'}>
+                              {p.keywords ? (
+                                <span className="bg-slate-800/60 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-medium">
+                                  {p.keywords.length > 20 ? p.keywords.substring(0, 20) + '...' : p.keywords}
+                                </span>
+                              ) : '-'}
                             </td>
 
                             {/* Action Buttons */}
