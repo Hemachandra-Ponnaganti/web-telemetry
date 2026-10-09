@@ -342,75 +342,6 @@ const initializeEmailQueue = async () => {
 };
 
 /**
- * Global SRE warning/critical alerts.
- */
-const sendAlertEmail = async (url, category, level, message) => {
-  const time = new Date().toLocaleString();
-  
-  const settings = loadSettings();
-  
-  const recipient = settings.critical_email;
-  const subject = `[${level.toUpperCase()}] SRE Alert Triggered - ${url}`;
-  
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; background-color: #f8fafc; padding: 20px; }
-        .card { max-width: 580px; margin: 0 auto; background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden; }
-        .header { background: #4f46e5; color: white; padding: 24px; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 0.02em; }
-        .header.critical { background: #ef4444; }
-        .header.warning { background: #f59e0b; }
-        .content { padding: 24px; font-size: 14px; line-height: 1.6; }
-        .badge { display: inline-block; padding: 3px 8px; font-size: 10px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; color: white; margin-bottom: 12px; }
-        .badge.critical { background: #ef4444; }
-        .badge.warning { background: #f59e0b; }
-        .badge.info { background: #3b82f6; }
-        .details { background: #f1f5f9; padding: 14px; border-radius: 8px; margin-top: 16px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 12px; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; padding: 16px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div class="header ${level}">
-          MonitorPro SRE Gateway Alert
-        </div>
-        <div class="content">
-          <span class="badge ${level}">${level}</span>
-          <div style="font-weight: 800; font-size: 15px; margin-bottom: 8px;">Anomalous Site Event Discovered!</div>
-          <p>During the automated real-time SRE check, our monitoring system flagged a state exception on the target host.</p>
-          
-          <div class="details">
-            <strong>URL:</strong> ${url}<br>
-            <strong>Category:</strong> ${category.toUpperCase()}<br>
-            <strong>Alert Message:</strong> ${message}<br>
-            <strong>Detected At:</strong> ${time} UTC
-          </div>
-          
-          <p style="margin-top: 16px;">Please log in to your SRE portal to verify details and run live traceroutes.</p>
-        </div>
-        <div class="footer">
-          MonitorPro Node SRE Module • Authorized email dispatch
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-  
-  await enqueueEmailAlert({
-    url,
-    recipient,
-    category,
-    level,
-    subject,
-    message,
-    html
-  });
-};
-
-/**
  * Per-website alert email sender.
  */
 const sendAlertEmailToWebsite = async (url, category, level, message, extraIssues = []) => {
@@ -697,7 +628,6 @@ const sendPeriodicReportEmail = async (url, recipient, stats) => {
 };
 
 module.exports = {
-  sendAlertEmail,
   sendAlertEmailToWebsite,
   sendPeriodicReportEmail,
   enqueueEmailAlert,

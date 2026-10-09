@@ -15,7 +15,6 @@ export default function SettingsPanel({ showToast }) {
   const [settings, setSettings] = useState({
     slack_webhook: '',
     telegram_chat_id: '',
-    critical_email: '',
     email_host_user: '',
     email_host_password: '',
     alert_email_recipients: '',
@@ -215,24 +214,6 @@ export default function SettingsPanel({ showToast }) {
                   </div>
                 </div>
 
-              </div>
-
-              {/* Critical Alert Receiver */}
-              <div className="space-y-2">
-                <label className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Critical Alert Recipient Email</label>
-                <div className="bg-dark-900 border border-slate-850/60 rounded-xl px-3 py-2.5 flex items-center gap-2 focus-within:border-indigo-500/50 transition-all shadow-inner">
-                  <Send className="text-slate-500 h-4 w-4 shrink-0" />
-                  <input 
-                    type="email"
-                    placeholder="alert-recipient@company.com"
-                    value={settings.critical_email}
-                    onChange={e => setSettings(prev => ({ ...prev, critical_email: e.target.value }))}
-                    className="bg-transparent border-none outline-none text-xs w-full text-slate-250 placeholder-slate-600"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 leading-normal mt-1.5 italic">
-                  * Note: For accessing with Gmail securely, configure a 16-character <strong>App Password</strong> in your Google Account Security settings.
-                </p>
               </div>
 
             </div>

@@ -457,7 +457,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
           level: 'critical',
           message: `CRITICAL: Database connection failed! The website is displaying a database error message.`
         });
-        await sendAlertEmail(url, 'database', 'critical', `CRITICAL: Database connection failed! The website is displaying a database error message.`);
         await sendAlertEmailToWebsite(url, 'database', 'critical', `CRITICAL: Database connection failed! The website is displaying a database error message. Check your database server immediately.`);
       }
     }
@@ -470,7 +469,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
         level: 'critical',
         message: `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`
       });
-      await sendAlertEmail(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`);
       await sendAlertEmailToWebsite(url, 'uptime', 'critical', `Downtime detected! Website returned HTTP ${auditReport.statusCode} status code.`);
     }
   } catch (err) {
@@ -484,7 +482,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       level: 'critical',
       message: `Downtime detected! SRE gateway connection failed: ${err.message}`
     });
-    await sendAlertEmail(url, 'uptime', 'critical', `Downtime detected! SRE gateway connection failed: ${err.message}`);
     await sendAlertEmailToWebsite(url, 'uptime', 'critical', `Downtime detected! SRE gateway connection failed: ${err.message}`);
   }
 
@@ -504,7 +501,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
           level: 'critical',
           message: `SSL Validation failed: ${sslInfo.message}`
         });
-        await sendAlertEmail(url, 'ssl', 'critical', `SSL Validation failed: ${sslInfo.message}`);
         await sendAlertEmailToWebsite(url, 'ssl', 'critical', `SSL Validation failed: ${sslInfo.message}`);
       } else if (sslInfo.daysRemaining <= 1) {
         await Alert.create({
@@ -513,7 +509,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
           level: 'critical',
           message: `CRITICAL: SSL Certificate expires in ${sslInfo.daysRemaining} day(s)! Renew immediately.`
         });
-        await sendAlertEmail(url, 'ssl', 'critical', `CRITICAL: SSL Certificate expires in ${sslInfo.daysRemaining} day(s)! Renew immediately.`);
         await sendAlertEmailToWebsite(url, 'ssl', 'critical', `CRITICAL: SSL Certificate expires in ${sslInfo.daysRemaining} day(s)! Renew immediately.`);
       } else if (sslInfo.daysRemaining <= 7) {
         await Alert.create({
@@ -522,7 +517,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
           level: 'warning',
           message: `SSL Certificate expires in ${sslInfo.daysRemaining} days! Schedule renewal now.`
         });
-        await sendAlertEmail(url, 'ssl', 'warning', `SSL Certificate expires in ${sslInfo.daysRemaining} days!`);
         await sendAlertEmailToWebsite(url, 'ssl', 'warning', `SSL Certificate expires in ${sslInfo.daysRemaining} days! Expiry date: ${sslInfo.expiryDate ? new Date(sslInfo.expiryDate).toLocaleDateString() : 'unknown'}. Recommendation: Renew SSL certificate before expiry.`);
       } else if (sslInfo.daysRemaining < 30) {
         await Alert.create({
@@ -531,7 +525,6 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
           level: 'warning',
           message: `SSL Certificate expires in ${sslInfo.daysRemaining} days! Renew immediately.`
         });
-        await sendAlertEmail(url, 'ssl', 'warning', `SSL Certificate expires in ${sslInfo.daysRemaining} days!`);
       }
     } catch (err) {
       auditReport.errors.push(`SSL Audit failed: ${err.message}`);
