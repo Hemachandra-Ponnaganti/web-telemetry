@@ -351,13 +351,29 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
     const config = await WebsiteEmailConfig.findOne({ url });
     if (!config || !config.alertsEnabled || !config.alertEmail) return;
     
-    // Check frequency throttle for non-instant modes
-    if (config.alertFrequency !== 'instant' && config.lastEmailSent) {
-      const now = Date.now();
-      const last = new Date(config.lastEmailSent).getTime();
-      const hoursSince = (now - last) / (1000 * 60 * 60);
-      if (config.alertFrequency === 'daily' && hoursSince < 24) return;
-      if (config.alertFrequency === 'weekly' && hoursSince < 168) return;
+    const allIssues = [{ category, level, message }, ...extraIssues];
+    const hasMultiple = allIssues.length > 1;
+    const topLevel = allIssues.some(i => i.level === 'critical') ? 'critical' : allIssues.some(i => i.level === 'warning') ? 'warning' : 'info';
+
+    // ── Frequency & Throttle Rules ──────────────────────────────────────────
+    // 1. Critical alerts (downtime, db error, urgent SSL expiry): ALWAYS send immediately for every scan!
+    // 2. Warning / Info alerts (SEO, missing alt tags, non-critical): Throttled to once every 3 days (72 hours).
+    if (topLevel !== 'critical') {
+      const lastSentTime = config.lastWarningEmailSent || config.lastEmailSent;
+      if (lastSentTime) {
+        const hoursSince = (Date.now() - new Date(lastSentTime).getTime()) / (1000 * 60 * 60);
+        if (hoursSince < 72) {
+          console.log(`⏳ [Alert Throttle] Skipping non-critical ${topLevel} alert for ${url} (last sent ${hoursSince.toFixed(1)}h ago; minimum cooldown: 72h / 3 days).`);
+          return;
+        }
+      }
+    } else {
+      // For critical alerts, check alertFrequency only if explicitly configured to daily/weekly summary mode
+      if (config.alertFrequency !== 'instant' && config.lastEmailSent) {
+        const hoursSince = (Date.now() - new Date(config.lastEmailSent).getTime()) / (1000 * 60 * 60);
+        if (config.alertFrequency === 'daily' && hoursSince < 24) return;
+        if (config.alertFrequency === 'weekly' && hoursSince < 168) return;
+      }
     }
     
     const emails = config.alertEmail.split(',').map(e => e.trim()).filter(Boolean);
@@ -367,10 +383,6 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
       ...(config.alertCc ? config.alertCc.split(',').map(e => e.trim()).filter(Boolean) : [])
     ];
     const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
-    
-    const allIssues = [{ category, level, message }, ...extraIssues];
-    const hasMultiple = allIssues.length > 1;
-    const topLevel = allIssues.some(i => i.level === 'critical') ? 'critical' : allIssues.some(i => i.level === 'warning') ? 'warning' : 'info';
     
     const subject = hasMultiple
       ? `[Website Monitor] ${allIssues.length} Issues Found — ${url}`
@@ -439,6 +451,17 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
       message: allIssues.map(i => i.message).join(' | '),
       html
     });
+
+    // Update timestamp trackers in WebsiteEmailConfig
+    const updatePayload = {
+      lastEmailSent: new Date(),
+      lastAlertType: topLevel,
+      $inc: { totalEmailsSent: 1 }
+    };
+    if (topLevel !== 'critical') {
+      updatePayload.lastWarningEmailSent = new Date();
+    }
+    await WebsiteEmailConfig.findOneAndUpdate({ url }, updatePayload);
   } catch (err) {
     console.error('❌ sendAlertEmailToWebsite error:', err.message);
   }

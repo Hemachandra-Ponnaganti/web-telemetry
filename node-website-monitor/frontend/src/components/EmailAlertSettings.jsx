@@ -384,7 +384,7 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         {/* Alert frequency */}
         <div className="space-y-2">
           <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-            Alert Frequency
+            Critical Alert Frequency
           </label>
           <div className="grid grid-cols-3 gap-2">
             {[
@@ -405,6 +405,10 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
                 <p className="text-[9px] mt-0.5 opacity-70">{opt.desc}</p>
               </button>
             ))}
+          </div>
+          <div className="flex items-center gap-1.5 p-2 bg-indigo-950/30 border border-indigo-800/40 rounded-lg text-[10px] text-indigo-300">
+            <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+            <span><strong>Policy Active:</strong> Critical issues (downtime & database failures) notify immediately. Non-critical warning alerts (SEO, missing alt tags) are limited to once every 3 days (72h) to prevent inbox clutter.</span>
           </div>
         </div>
 

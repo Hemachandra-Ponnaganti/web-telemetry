@@ -184,7 +184,7 @@ router.get('/email-config', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required.' });
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
-    const config = await WebsiteEmailConfig.findOne({ url }) || { url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastEmailSent: null, lastAlertType: '', reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null };
+    const config = await WebsiteEmailConfig.findOne({ url }) || { url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastEmailSent: null, lastWarningEmailSent: null, lastAlertType: '', reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null };
     res.status(200).json(config);
   } catch (err) {
     res.status(500).json({ error: err.message });
