@@ -9,7 +9,13 @@ import {
 
 import { API_BASE } from '../apiConfig';
 
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+const areValidEmails = (emailsStr) => {
+  if (!emailsStr || !emailsStr.trim()) return true;
+  const list = emailsStr.split(',').map(e => e.trim()).filter(Boolean);
+  return list.length > 0 && list.every(isValidEmail);
+};
 
 const LEVEL_COLORS = {
   critical: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
@@ -33,9 +39,11 @@ const ALERT_TRIGGERS = [
 export default function EmailAlertSettings({ siteUrl, showToast }) {
   const [config, setConfig] = useState({
     alertEmail:     '',
+    alertCc:        '',
     alertsEnabled:  false,
     alertFrequency: 'instant',
     reportEmail:    '',
+    reportCc:       '',
     reportsEnabled: false,
     reportFrequency:'48h',
     totalEmailsSent: 0,
@@ -43,8 +51,10 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
     lastAlertType:   '',
     lastReportSent:  null,
   });
-  const [emailInput, setEmailInput]   = useState('');
+  const [emailInput, setEmailInput]             = useState('');
+  const [alertCcInput, setAlertCcInput]         = useState('');
   const [reportEmailInput, setReportEmailInput] = useState('');
+  const [reportCcInput, setReportCcInput]       = useState('');
   const [emailError, setEmailError]   = useState('');
   const [saving, setSaving]           = useState(false);
   const [testing, setTesting]         = useState(false);
@@ -61,7 +71,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       const data = resp.data || {};
       setConfig(data);
       setEmailInput(data.alertEmail || '');
+      setAlertCcInput(data.alertCc || '');
       setReportEmailInput(data.reportEmail || '');
+      setReportCcInput(data.reportCc || '');
     } catch (err) {
       console.error('Failed to load email config:', err);
     } finally {
@@ -130,13 +142,21 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
   }, [siteUrl]);
 
   const handleSave = async () => {
-    // Validate email
-    if (emailInput && !isValidEmail(emailInput)) {
-      setEmailError('Please enter a valid alert email address.');
+    // Validate emails
+    if (emailInput && !areValidEmails(emailInput)) {
+      setEmailError('Please enter a valid alert email address (or comma-separated emails).');
       return;
     }
-    if (reportEmailInput && !isValidEmail(reportEmailInput)) {
-      setEmailError('Please enter a valid report email address.');
+    if (alertCcInput && !areValidEmails(alertCcInput)) {
+      setEmailError('Please enter valid CC email addresses separated by commas.');
+      return;
+    }
+    if (reportEmailInput && !areValidEmails(reportEmailInput)) {
+      setEmailError('Please enter a valid report email address (or comma-separated emails).');
+      return;
+    }
+    if (reportCcInput && !areValidEmails(reportCcInput)) {
+      setEmailError('Please enter valid report CC email addresses separated by commas.');
       return;
     }
     setEmailError('');
@@ -145,14 +165,22 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       const resp = await axios.post(`${API_BASE}/email-config`, {
         url:            siteUrl,
         alertEmail:     emailInput,
+        alertCc:        alertCcInput,
         alertsEnabled:  config.alertsEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput,
+        reportCc:       reportCcInput,
         reportsEnabled: config.reportsEnabled,
         reportFrequency:config.reportFrequency,
       });
       if (resp.data.success) {
-        setConfig(prev => ({ ...prev, alertEmail: emailInput, reportEmail: reportEmailInput }));
+        setConfig(prev => ({
+          ...prev,
+          alertEmail: emailInput,
+          alertCc: alertCcInput,
+          reportEmail: reportEmailInput,
+          reportCc: reportCcInput
+        }));
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         showToast('Settings saved successfully!', 'success');
@@ -178,9 +206,11 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       await axios.post(`${API_BASE}/email-config`, {
         url:            siteUrl,
         alertEmail:     emailInput || config.alertEmail,
+        alertCc:        alertCcInput !== undefined ? alertCcInput : config.alertCc,
         alertsEnabled:  newEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput || config.reportEmail,
+        reportCc:       reportCcInput !== undefined ? reportCcInput : config.reportCc,
         reportsEnabled: config.reportsEnabled,
         reportFrequency:config.reportFrequency,
       });
@@ -202,9 +232,11 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       await axios.post(`${API_BASE}/email-config`, {
         url:            siteUrl,
         alertEmail:     emailInput || config.alertEmail,
+        alertCc:        alertCcInput !== undefined ? alertCcInput : config.alertCc,
         alertsEnabled:  config.alertsEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput || config.reportEmail,
+        reportCc:       reportCcInput !== undefined ? reportCcInput : config.reportCc,
         reportsEnabled: newEnabled,
         reportFrequency:config.reportFrequency,
       });
@@ -310,23 +342,42 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
           <div className={`flex items-center gap-2 bg-slate-900/60 border rounded-xl px-3.5 py-2.5 transition-all ${emailError ? 'border-rose-500/50' : 'border-slate-800 focus-within:border-indigo-500/60'}`}>
             <Mail className="h-4 w-4 text-slate-500 shrink-0" />
             <input
-              type="email"
-              placeholder="your@gmail.com"
+              type="text"
+              placeholder="primary@gmail.com"
               value={emailInput}
               onChange={e => { setEmailInput(e.target.value); setEmailError(''); }}
               className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
             />
-            {emailInput && isValidEmail(emailInput) && (
+            {emailInput && areValidEmails(emailInput) && (
               <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
             )}
           </div>
-          {emailError && (
-            <p className="text-[10px] text-rose-400 font-bold flex items-center gap-1.5">
-              <AlertCircle className="h-3 w-3 shrink-0" /> {emailError}
-            </p>
-          )}
           <p className="text-[10px] text-slate-500 italic">
-            All monitoring alerts for <span className="text-slate-400 font-mono">{siteUrl}</span> will be sent to this address.
+            Primary email address for critical downtime & vulnerability alerts.
+          </p>
+        </div>
+
+        {/* Alert CC input */}
+        <div className="space-y-2">
+          <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+            <span>Alert CC Recipients (Optional)</span>
+            <span className="text-[9px] text-slate-500 normal-case font-normal">Comma-separated</span>
+          </label>
+          <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 focus-within:border-indigo-500/60 rounded-xl px-3.5 py-2.5 transition-all">
+            <Mail className="h-4 w-4 text-slate-500 shrink-0" />
+            <input
+              type="text"
+              placeholder="lead@company.com, sre-team@company.com"
+              value={alertCcInput}
+              onChange={e => { setAlertCcInput(e.target.value); setEmailError(''); }}
+              className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+            />
+            {alertCcInput && areValidEmails(alertCcInput) && (
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            )}
+          </div>
+          <p className="text-[10px] text-slate-500 italic">
+            Copy team members on every automated incident alert.
           </p>
         </div>
 
@@ -405,18 +456,42 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
             <div className={`flex items-center gap-2 bg-slate-900/60 border rounded-xl px-3.5 py-2.5 transition-all ${emailError && emailError.includes('report') ? 'border-rose-500/50' : 'border-slate-800 focus-within:border-emerald-500/60'}`}>
               <Mail className="h-4 w-4 text-slate-500 shrink-0" />
               <input
-                type="email"
+                type="text"
                 placeholder="reports@yourdomain.com"
                 value={reportEmailInput}
                 onChange={e => { setReportEmailInput(e.target.value); setEmailError(''); }}
                 className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
               />
-              {reportEmailInput && isValidEmail(reportEmailInput) && (
+              {reportEmailInput && areValidEmails(reportEmailInput) && (
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
               )}
             </div>
             <p className="text-[10px] text-slate-500 italic">
-              Routine reports will be emailed to this address. Can be different from your alert email.
+              Primary recipient for automated performance and health digest reports.
+            </p>
+          </div>
+
+          {/* Report CC input */}
+          <div className="space-y-2">
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+              <span>Report CC Recipients (Optional)</span>
+              <span className="text-[9px] text-slate-500 normal-case font-normal">Comma-separated</span>
+            </label>
+            <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 focus-within:border-emerald-500/60 rounded-xl px-3.5 py-2.5 transition-all">
+              <Mail className="h-4 w-4 text-slate-500 shrink-0" />
+              <input
+                type="text"
+                placeholder="client@clientdomain.com, manager@yourdomain.com"
+                value={reportCcInput}
+                onChange={e => { setReportCcInput(e.target.value); setEmailError(''); }}
+                className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+              />
+              {reportCcInput && areValidEmails(reportCcInput) && (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 italic">
+              Additional stakeholders to CC on recurring health summaries.
             </p>
           </div>
 

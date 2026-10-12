@@ -362,7 +362,11 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
     
     const emails = config.alertEmail.split(',').map(e => e.trim()).filter(Boolean);
     const recipient = emails[0];
-    const cc = emails.slice(1).join(', ') || undefined;
+    const ccList = [
+      ...emails.slice(1),
+      ...(config.alertCc ? config.alertCc.split(',').map(e => e.trim()).filter(Boolean) : [])
+    ];
+    const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
     
     const allIssues = [{ category, level, message }, ...extraIssues];
     const hasMultiple = allIssues.length > 1;
@@ -443,9 +447,17 @@ const sendAlertEmailToWebsite = async (url, category, level, message, extraIssue
 /**
  * Send periodic performance and security report email.
  */
-const sendPeriodicReportEmail = async (url, recipient, stats) => {
+const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '') => {
   try {
-    const subject = `[MonitorPro] 48-Hour Health Report for ${url}`;
+    const reportEmails = (recipientInput || '').split(',').map(e => e.trim()).filter(Boolean);
+    const recipient = reportEmails[0];
+    const ccList = [
+      ...reportEmails.slice(1),
+      ...(ccInput ? ccInput.split(',').map(e => e.trim()).filter(Boolean) : [])
+    ];
+    const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
+
+    const subject = `[MonitorPro] Health Report for ${url}`;
     
     // Build a nicely formatted HTML table for recent scan history (up to 30 scans)
     let historyRows = '';
@@ -614,14 +626,15 @@ const sendPeriodicReportEmail = async (url, recipient, stats) => {
     await enqueueEmailAlert({
       url,
       recipient,
+      cc,
       category: 'report',
       level: 'info',
       subject,
-      message: 'Periodic 48-hour website health report generated.',
+      message: 'Periodic website health report generated.',
       html
     });
     
-    console.log(`📧 Queued periodic 48h report email for ${url} to ${recipient}`);
+    console.log(`📧 Queued periodic report email for ${url} to ${recipient}${cc ? ` (CC: ${cc})` : ''}`);
   } catch (err) {
     console.error('❌ Error sending periodic report email:', err.message);
   }

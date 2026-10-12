@@ -1065,9 +1065,9 @@ const startUptimeScheduler = (io) => {
           }
 
           if (shouldSend) {
-            console.log(`📊 Generating ${config.reportFrequency} periodic report for ${site.url} to ${config.reportEmail}...`);
+            console.log(`📊 Generating ${config.reportFrequency} periodic report for ${site.url} to ${config.reportEmail}${config.reportCc ? ` (CC: ${config.reportCc})` : ''}...`);
             const stats = await compileStats(site.url);
-            await sendPeriodicReportEmail(site.url, config.reportEmail, stats);
+            await sendPeriodicReportEmail(site.url, config.reportEmail, stats, config.reportCc);
             
             // Update lastReportSent
             await WebsiteEmailConfig.findOneAndUpdate(

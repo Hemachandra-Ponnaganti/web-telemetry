@@ -184,7 +184,7 @@ router.get('/email-config', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required.' });
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
-    const config = await WebsiteEmailConfig.findOne({ url }) || { url, alertEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastEmailSent: null, lastAlertType: '' };
+    const config = await WebsiteEmailConfig.findOne({ url }) || { url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastEmailSent: null, lastAlertType: '', reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null };
     res.status(200).json(config);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -192,22 +192,38 @@ router.get('/email-config', async (req, res) => {
 });
 
 router.post('/email-config', async (req, res) => {
-  const { url, alertEmail, alertsEnabled, alertFrequency, reportEmail, reportsEnabled, reportFrequency } = req.body;
+  const { url, alertEmail, alertCc, alertsEnabled, alertFrequency, reportEmail, reportCc, reportsEnabled, reportFrequency } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required.' });
-  // Basic email validation
-  if (alertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
+  
+  const validateEmails = (str) => {
+    if (!str) return true;
+    const list = str.split(',').map(e => e.trim()).filter(Boolean);
+    return list.every(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  };
+
+  // Email validation for single or comma-separated emails
+  if (alertEmail && !validateEmails(alertEmail)) {
     return res.status(400).json({ error: 'Invalid alert email address format.' });
   }
-  if (reportEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reportEmail)) {
+  if (alertCc && !validateEmails(alertCc)) {
+    return res.status(400).json({ error: 'Invalid alert CC email address format.' });
+  }
+  if (reportEmail && !validateEmails(reportEmail)) {
     return res.status(400).json({ error: 'Invalid report email address format.' });
   }
+  if (reportCc && !validateEmails(reportCc)) {
+    return res.status(400).json({ error: 'Invalid report CC email address format.' });
+  }
+
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
     const updatePayload = {
       alertEmail: alertEmail || '',
+      alertCc: alertCc !== undefined ? alertCc : '',
       alertsEnabled: !!alertsEnabled,
       alertFrequency: alertFrequency || 'instant',
       reportEmail: reportEmail !== undefined ? reportEmail : '',
+      reportCc: reportCc !== undefined ? reportCc : '',
       reportsEnabled: !!reportsEnabled,
       reportFrequency: reportFrequency || '48h',
       updatedAt: new Date()
@@ -251,7 +267,7 @@ router.post('/test-site-report', async (req, res) => {
     }
 
     const stats = await compileStats(url);
-    await sendPeriodicReportEmail(url, config.reportEmail, stats);
+    await sendPeriodicReportEmail(url, config.reportEmail, stats, config.reportCc);
 
     res.status(200).json({ success: true, message: 'Test report generation started and added to the mail queue!' });
   } catch (err) {
@@ -272,7 +288,14 @@ router.post('/test-site-email', async (req, res) => {
       return res.status(400).json({ success: false, error: 'No alert email configured for this website. Save an email address in the Email Alerts tab first.' });
     }
 
-    const recipient = config.alertEmail;
+    const rawAlertEmails = config.alertEmail.split(',').map(e => e.trim()).filter(Boolean);
+    const recipient = rawAlertEmails[0];
+    const ccList = [
+      ...rawAlertEmails.slice(1),
+      ...(config.alertCc ? config.alertCc.split(',').map(e => e.trim()).filter(Boolean) : [])
+    ];
+    const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
+
     const subject   = '[Website Monitor] Test Alert — Email Alerts are Working';
     const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:20px;background:#f8fafc;">
       <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
@@ -302,6 +325,7 @@ router.post('/test-site-email', async (req, res) => {
     const doc = await enqueueEmailAlert({
       url,
       recipient,
+      cc,
       category: 'test',
       level: 'info',
       subject,

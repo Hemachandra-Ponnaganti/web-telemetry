@@ -474,12 +474,14 @@ const Alert = {
 const websiteEmailConfigSchema = new mongoose.Schema({
   url:              { type: String, required: true, unique: true },
   alertEmail:       { type: String, default: '' },
+  alertCc:          { type: String, default: '' },
   alertsEnabled:    { type: Boolean, default: false },
   alertFrequency:   { type: String, enum: ['instant', 'daily', 'weekly'], default: 'instant' },
   lastEmailSent:    { type: Date, default: null },
   totalEmailsSent:  { type: Number, default: 0 },
   lastAlertType:    { type: String, default: '' },
   reportEmail:      { type: String, default: '' },
+  reportCc:         { type: String, default: '' },
   reportsEnabled:   { type: Boolean, default: false },
   reportFrequency:  { type: String, enum: ['12h', '24h', '48h', '72h', '7d'], default: '48h' },
   lastReportSent:   { type: Date, default: null },
@@ -527,7 +529,7 @@ const WebsiteEmailConfig = {
       saveToDisk();
       return inMemoryEmailConfig[index];
     } else if (options.upsert) {
-      const doc = { url: query.url, alertEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', reportEmail: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
+      const doc = { url: query.url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
       inMemoryEmailConfig.push(doc);
       saveToDisk();
       return doc;
