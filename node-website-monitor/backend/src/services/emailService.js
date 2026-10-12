@@ -447,10 +447,10 @@ const sendPeriodicReportEmail = async (url, recipient, stats) => {
   try {
     const subject = `[MonitorPro] 48-Hour Health Report for ${url}`;
     
-    // Build a nicely formatted HTML table for recent scan history
+    // Build a nicely formatted HTML table for recent scan history (up to 30 scans)
     let historyRows = '';
     if (stats.historyLog && stats.historyLog.length > 0) {
-      historyRows = stats.historyLog.slice(0, 10).map(log => {
+      historyRows = stats.historyLog.slice(0, 30).map(log => {
         const statusColor = log.isUp ? '#22c55e' : '#ef4444';
         const statusText = log.isUp ? 'UP' : 'DOWN';
         const date = new Date(log.checkedAt).toLocaleString();
@@ -471,8 +471,8 @@ const sendPeriodicReportEmail = async (url, recipient, stats) => {
     // Generate a QuickChart URL for the graphical representation
     let chartUrl = '';
     if (stats.historyLog && stats.historyLog.length > 0) {
-      // Get up to 20 most recent logs and reverse them so they are chronological (oldest to newest)
-      const chartData = [...stats.historyLog].slice(0, 20).reverse();
+      // Get up to 60 most recent logs and reverse them so they are chronological (oldest to newest)
+      const chartData = [...stats.historyLog].slice(0, 60).reverse();
       const labels = chartData.map(log => {
         const d = new Date(log.checkedAt);
         return `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
@@ -586,7 +586,7 @@ const sendPeriodicReportEmail = async (url, recipient, stats) => {
           </div>
           ` : ''}
 
-          <h3 style="font-size:14px;font-weight:800;color:#0f172a;margin:0 0 10px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Recent Audit History (Last 10 Scans)</h3>
+          <h3 style="font-size:14px;font-weight:800;color:#0f172a;margin:0 0 10px;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Recent Audit History</h3>
           <table style="width:100%;border-collapse:collapse;margin-bottom:24px;text-align:left;">
             <thead>
               <tr style="background:#f8fafc;">

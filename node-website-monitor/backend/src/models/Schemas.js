@@ -490,12 +490,38 @@ const RealWebsiteEmailConfig = mongoose.model('RealWebsiteEmailConfig', websiteE
 
 const WebsiteEmailConfig = {
   findOne: async (query = {}) => {
-    if (isConnected()) return await RealWebsiteEmailConfig.findOne(query);
-    return inMemoryEmailConfig.find(c => c.url === query.url) || null;
+    if (isConnected()) {
+      if (query.url) {
+        const clean = query.url.replace(/\/+$/, '').toLowerCase();
+        return await RealWebsiteEmailConfig.findOne({
+          $or: [
+            { url: query.url },
+            { url: clean },
+            { url: `${clean}/` }
+          ]
+        });
+      }
+      return await RealWebsiteEmailConfig.findOne(query);
+    }
+    return inMemoryEmailConfig.find(c => matchUrlQuery(c.url, query.url)) || null;
   },
   findOneAndUpdate: async (query, updateData, options = {}) => {
-    if (isConnected()) return await RealWebsiteEmailConfig.findOneAndUpdate(query, updateData, options);
-    let index = inMemoryEmailConfig.findIndex(c => c.url === query.url);
+    if (isConnected()) {
+      if (query.url) {
+        const clean = query.url.replace(/\/+$/, '').toLowerCase();
+        const existing = await RealWebsiteEmailConfig.findOne({
+          $or: [
+            { url: query.url },
+            { url: clean },
+            { url: `${clean}/` }
+          ]
+        });
+        const targetUrl = existing ? existing.url : query.url;
+        return await RealWebsiteEmailConfig.findOneAndUpdate({ url: targetUrl }, updateData, options);
+      }
+      return await RealWebsiteEmailConfig.findOneAndUpdate(query, updateData, options);
+    }
+    let index = inMemoryEmailConfig.findIndex(c => matchUrlQuery(c.url, query.url));
     if (index !== -1) {
       inMemoryEmailConfig[index] = { ...inMemoryEmailConfig[index], ...updateData, updatedAt: new Date() };
       saveToDisk();

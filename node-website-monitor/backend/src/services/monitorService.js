@@ -788,18 +788,18 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
   // Save full audit report log in history collection
   const log = await MonitorHistory.create(auditReport);
 
-  // Auto-prune older scans (prune 50% if total scans exceed 15) to keep DB/memory lightweight
+  // Auto-prune older scans (keep up to 60 scans per target) to keep DB/memory lightweight
   try {
     const siteScansCount = await MonitorHistory.countDocuments({ url });
-    if (siteScansCount > 15) {
-      const pruneCount = Math.floor(siteScansCount * 0.5);
+    if (siteScansCount > 60) {
+      const pruneCount = siteScansCount - 60;
       const oldestScans = await MonitorHistory.find({ url })
         .sort({ checkedAt: 1 })
         .limit(pruneCount);
       const idsToDelete = (Array.isArray(oldestScans) ? oldestScans : []).map(s => s._id).filter(Boolean);
       if (idsToDelete.length > 0) {
         await MonitorHistory.deleteMany({ _id: { $in: idsToDelete } });
-        console.log(`🧹 [Auto-Prune 50%] Deleted ${idsToDelete.length} older scans for ${url}`);
+        console.log(`🧹 [Auto-Prune] Deleted ${idsToDelete.length} older scans (retaining 60) for ${url}`);
       }
     }
   } catch (pruneErr) {
@@ -846,17 +846,17 @@ const compileStats = async (url) => {
   // 1. Calculate count using countDocuments (0 documents transferred to Node heap)
   let totalChecks = await MonitorHistory.countDocuments(filter);
 
-  // 2. Auto-prune older scans (prune 50% if site has more than 10 scans)
-  if (totalChecks > 10) {
+  // 2. Auto-prune older scans (keep up to 60 scans per target to ensure full historical data)
+  if (totalChecks > 60) {
     try {
-      const pruneCount = Math.floor(totalChecks * 0.5);
+      const pruneCount = totalChecks - 60;
       const oldestScans = await MonitorHistory.find(filter)
         .sort({ checkedAt: 1 })
         .limit(pruneCount);
       const idsToDelete = (Array.isArray(oldestScans) ? oldestScans : []).map(s => s._id).filter(Boolean);
       if (idsToDelete.length > 0) {
         await MonitorHistory.deleteMany({ _id: { $in: idsToDelete } });
-        console.log(`🧹 [Auto-Prune 50%] Pruned ${idsToDelete.length} older scans for ${normalizedUrl}`);
+        console.log(`🧹 [Auto-Prune] Pruned ${idsToDelete.length} older scans (retaining last 60 scans) for ${normalizedUrl}`);
         totalChecks = await MonitorHistory.countDocuments(filter);
       }
     } catch (pruneErr) {
@@ -881,8 +881,8 @@ const compileStats = async (url) => {
     }
   }
   
-  // 4. Fetch up to 15 recent scans for graphs and historical log
-  let pastHistory = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(15);
+  // 4. Fetch up to 60 recent scans for graphs and historical log
+  let pastHistory = await MonitorHistory.find(filter).sort({ checkedAt: -1 }).limit(60);
   if (!Array.isArray(pastHistory)) pastHistory = [];
   
   const wordpressDoc = await WordPressMonitor.findOne(filter);
