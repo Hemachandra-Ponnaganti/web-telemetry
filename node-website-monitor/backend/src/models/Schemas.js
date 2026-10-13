@@ -421,6 +421,20 @@ const Alert = {
     }
     return alert;
   },
+  findOne: async (query = {}) => {
+    if (isConnected()) return await RealAlert.findOne(query);
+    return inMemoryAlerts.find(a => {
+      if (query.url && !matchUrlQuery(a.url, query.url)) return false;
+      if (query.category && a.category !== query.category) return false;
+      if (query.level && a.level !== query.level) return false;
+      if (query.resolved !== undefined && a.resolved !== query.resolved) return false;
+      if (query.message) {
+        if (query.message instanceof RegExp && !query.message.test(a.message)) return false;
+        if (typeof query.message === 'string' && a.message !== query.message) return false;
+      }
+      return true;
+    }) || null;
+  },
   find: (query = {}) => {
     const isConn = isConnected();
     const filterData = () => {

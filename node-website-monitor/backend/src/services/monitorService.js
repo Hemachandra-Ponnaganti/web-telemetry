@@ -764,16 +764,31 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       }
       
       if (alerts.length > 0) {
-        await Alert.create({
+        const fullMessage = alerts.join(' ');
+
+        // Check if an alert for this modification was already sent recently (within last 24h) to avoid spamming subsequent scans
+        const existingAlert = await Alert.findOne({
           url,
           category: 'security',
-          level: 'critical',
-          message: alerts.join(' ')
+          message: { $regex: /Modification detected/i },
+          resolved: false
         });
-        
-        // Also send an email alert
-        const { sendAlertEmailToWebsite } = require('./emailService');
-        await sendAlertEmailToWebsite(url, 'security', 'critical', `Site Modification Alert: ${alerts.join(' ')}`);
+
+        // Only create alert and dispatch email if not already alerted
+        if (!existingAlert) {
+          await Alert.create({
+            url,
+            category: 'security',
+            level: 'critical',
+            message: fullMessage
+          });
+          
+          // Send email alert once for this change event
+          const { sendAlertEmailToWebsite } = require('./emailService');
+          await sendAlertEmailToWebsite(url, 'security', 'critical', `Site Modification Alert: ${fullMessage}`);
+        } else {
+          console.log(`ℹ️ [Modification Alert] Suppressing repeated notification for ${url} (already alerted).`);
+        }
       }
     };
 
