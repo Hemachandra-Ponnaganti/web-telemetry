@@ -242,7 +242,7 @@ const checkSslCertificate = (hostname) => {
       host: hostname,
       port: 443,
       servername: hostname,
-      timeout: 5000,
+      timeout: 15000,
       rejectUnauthorized: false
     }, () => {
       const cert = socket.getPeerCertificate();
@@ -329,10 +329,21 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
     snapshotData: ""
   };
 
-  // 1. DNS Resolution Speed Audit
+  // 1. DNS Resolution Speed Audit (with dns.lookup fallback if resolve4 fails)
   const dnsStart = Date.now();
   try {
-    const addresses = await dns.resolve4(hostname);
+    let addresses;
+    try {
+      addresses = await dns.resolve4(hostname);
+    } catch (resolveErr) {
+      // Fallback to system OS resolver dns.lookup if queryA / resolve4 throws (e.g. ECONNREFUSED)
+      const lookupRes = await dns.lookup(hostname);
+      if (lookupRes && lookupRes.address) {
+        addresses = [lookupRes.address];
+      } else {
+        throw resolveErr;
+      }
+    }
     auditReport.dnsResolutionTimeMs = Date.now() - dnsStart;
     if (!addresses || addresses.length === 0) {
       throw new Error('DNS lookup succeeded but returned no IP records.');
@@ -345,8 +356,12 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
   // 2. HTTP Status, TTFB, and latency tracking using axios
   const httpsAgent = new https.Agent({ rejectUnauthorized: false });
   const axiosInstance = axios.create({
-    timeout: 8000,
-    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MonitorProSRE/1.0' },
+    timeout: 15000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9'
+    },
     validateStatus: () => true,
     httpsAgent
   });

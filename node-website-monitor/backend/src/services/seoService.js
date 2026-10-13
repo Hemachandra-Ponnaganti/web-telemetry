@@ -415,8 +415,11 @@ const analyzeSeo = async (url, htmlContent = '') => {
   if (!html) {
     try {
       const resp = await axios.get(url, { 
-        timeout: 6000, 
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MonitorProSRE/1.0' }, 
+        timeout: 15000, 
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+        }, 
         validateStatus: () => true,
         httpsAgent
       });
