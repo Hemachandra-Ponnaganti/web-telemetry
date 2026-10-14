@@ -6,6 +6,7 @@ import {
 
 export default function WebsitesCatalog({ 
   targets = [], 
+  isLoading = false,
   onSelectWebsite, 
   onAddWebsite, 
   onDeleteWebsite, 
@@ -168,8 +169,52 @@ export default function WebsitesCatalog({
         </div>
       </div>
 
-      {/* Grid of Website Boxes */}
-      {filteredTargets.length > 0 ? (
+      {/* Grid of Website Boxes or Loading Skeletons */}
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 animate-pulse px-1">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+            <span>Loading monitored websites...</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((idx) => (
+              <div
+                key={`skeleton-${idx}`}
+                className="glass-card rounded-2xl border border-slate-800/80 overflow-hidden flex flex-col justify-between animate-pulse"
+              >
+                {/* Simulated Header Preview */}
+                <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-4 border-b border-slate-800/60">
+                  <div className="h-6 bg-slate-800/80 rounded-lg mb-3 w-4/5" />
+                  <div className="h-28 rounded-xl bg-slate-900/90 border border-slate-800/80 flex items-center justify-center relative overflow-hidden">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800/60" />
+                    <div className="absolute top-2.5 left-2.5 h-10 w-10 rounded-full bg-slate-800/80" />
+                    <div className="absolute top-2.5 right-2.5 h-6 w-16 rounded-full bg-slate-800/80" />
+                  </div>
+                </div>
+
+                {/* Simulated Body Content */}
+                <div className="p-5 space-y-4">
+                  <div className="space-y-2">
+                    <div className="h-4 bg-slate-800 rounded w-2/3" />
+                    <div className="h-3 bg-slate-800/60 rounded w-1/2" />
+                  </div>
+                  {/* Stats pills */}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/50">
+                    <div className="h-12 bg-slate-800/40 rounded-lg" />
+                    <div className="h-12 bg-slate-800/40 rounded-lg" />
+                    <div className="h-12 bg-slate-800/40 rounded-lg" />
+                  </div>
+                </div>
+
+                {/* Simulated Footer Button */}
+                <div className="p-4 bg-dark-900/40 border-t border-slate-800/60">
+                  <div className="h-9 bg-slate-800/70 rounded-xl w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : filteredTargets.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTargets.map((site) => {
             let hostname = site.url;

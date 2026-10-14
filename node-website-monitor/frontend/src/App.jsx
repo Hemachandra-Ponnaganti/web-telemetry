@@ -164,8 +164,11 @@ export default function App() {
     }, 200);
   }, []);
 
+  const [targetsLoading, setTargetsLoading] = useState(true);
+
   // Fetch unique audited SRE target list
   const fetchTargets = async () => {
+    setTargetsLoading(true);
     try {
       const response = await axios.get(`${API_BASE}/targets`);
       if (Array.isArray(response.data)) {
@@ -176,6 +179,8 @@ export default function App() {
     } catch (err) {
       console.error("Failed to fetch SRE audited targets:", err);
       setTargets([]);
+    } finally {
+      setTargetsLoading(false);
     }
   };
   const [error, setError] = useState(null);
@@ -801,6 +806,7 @@ export default function App() {
           {viewMode === 'grid' ? (
             <WebsitesCatalog
               targets={targets}
+              isLoading={targetsLoading}
               onSelectWebsite={handleSelectWebsite}
               onAddWebsite={handleAddWebsite}
               onDeleteWebsite={handleDeleteWebsite}
