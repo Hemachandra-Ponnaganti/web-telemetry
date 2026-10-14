@@ -237,8 +237,10 @@ const MonitorHistory = {
     const sortData = (data, sortQuery) => {
       let sorted = [...data];
       if (sortQuery && sortQuery.checkedAt) {
-        const dir = sortQuery.checkedAt < 0 ? -1 : 1;
-        sorted.sort((a, b) => dir * (new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0)));
+        sorted.sort((a, b) => {
+          const diff = new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0);
+          return sortQuery.checkedAt < 0 ? diff : -diff;
+        });
       }
       return sorted;
     };
@@ -307,8 +309,10 @@ const MonitorHistory = {
     const sortData = (data, sortQuery) => {
       let sorted = [...data];
       if (sortQuery && sortQuery.checkedAt) {
-        const dir = sortQuery.checkedAt < 0 ? -1 : 1;
-        sorted.sort((a, b) => dir * (new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0)));
+        sorted.sort((a, b) => {
+          const diff = new Date(b.checkedAt || 0) - new Date(a.checkedAt || 0);
+          return sortQuery.checkedAt < 0 ? diff : -diff;
+        });
       }
       return sorted;
     };
