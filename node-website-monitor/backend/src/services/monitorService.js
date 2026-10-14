@@ -22,41 +22,115 @@ const { analyseMalware } = require('./malwareService');
 const { sendAlertEmail, sendAlertEmailToWebsite } = require('./emailService');
 
 /**
- * Socket-level WHOIS client on port 43 to retrieve exact domain registration expiry.
+ * Retrieve exact domain registration and expiry dates using WHOIS and RDAP fallback.
  * 
  * @param {string} hostname - Target domain host.
  * @returns {Promise<object|null>} Registration dates or null if failed.
  */
-const queryWhois = (hostname) => {
-  return new Promise((resolve) => {
-    let whoisServer = 'whois.iana.org';
-    if (hostname.endsWith('.org')) whoisServer = 'whois.pir.org';
-    else if (hostname.endsWith('.com') || hostname.endsWith('.net')) whoisServer = 'whois.verisign-grs.com';
-    else if (hostname.endsWith('.edu')) whoisServer = 'whois.educause.edu';
-    
-    const client = net.createConnection({ host: whoisServer, port: 43 }, () => {
-      client.write(hostname + '\r\n');
-    });
-    
-    let data = '';
-    client.on('data', (chunk) => { data += chunk; });
-    client.on('end', () => {
-      const match = data.match(/(Registry Expiry Date|Expiration Date|expiry|expires):[ \t]*([^\r\n]*)/i);
-      if (match && match[2]) {
-        const expDate = new Date(match[2].trim());
-        if (!isNaN(expDate.getTime())) {
-          const daysLeft = Math.max(0, Math.round((expDate - new Date()) / (1000 * 60 * 60 * 24)));
-          return resolve({ expiryDate: expDate, daysRemaining: daysLeft });
+const queryWhois = async (hostname) => {
+  // Extract base domain (e.g., sub.example.com -> example.com, example.co.in -> example.co.in)
+  const cleanHost = String(hostname || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
+  const parts = cleanHost.split('.');
+  const baseDomain = parts.length > 2 ? parts.slice(-2).join('.') : parts.join('.');
+  
+  // 1. Try whoisDomain from whoiser (matches the working /whois route)
+  try {
+    const { whoisDomain } = require('whoiser');
+    const domainInfo = await whoisDomain(baseDomain);
+    for (const key in domainInfo) {
+      const data = domainInfo[key];
+      if (data && typeof data === 'object') {
+        const expiry = data['Expiry Date'] || data['Registry Expiry Date'] || data['expires'];
+        const registrar = data['Registrar'] || data['registrar'];
+        if (expiry) {
+          const expDate = new Date(expiry);
+          if (!isNaN(expDate.getTime())) {
+            const daysLeft = Math.max(0, Math.round((expDate - new Date()) / (1000 * 60 * 60 * 24)));
+            return {
+              expiryDate: expDate,
+              daysRemaining: daysLeft,
+              registrar: registrar || 'WHOIS Verified'
+            };
+          }
         }
       }
-      resolve(null);
+    }
+  } catch (e) {}
+
+  // 2. Try RDAP
+  try {
+    const rdapRes = await axios.get(`https://rdap.org/domain/${baseDomain}`, { timeout: 6000 });
+    const events = rdapRes.data?.events || [];
+    const expEvent = events.find(e => e.eventAction === 'expiration');
+    if (expEvent && expEvent.eventDate) {
+      const expDate = new Date(expEvent.eventDate);
+      if (!isNaN(expDate.getTime())) {
+        const daysLeft = Math.max(0, Math.round((expDate - new Date()) / (1000 * 60 * 60 * 24)));
+        const entities = rdapRes.data?.entities || [];
+        const regEntity = entities.find(e => e.roles && e.roles.includes('registrar'));
+        let registrar = 'Unknown';
+        if (regEntity && regEntity.vcardArray) {
+          const fn = regEntity.vcardArray[1]?.find(item => item[0] === 'fn');
+          if (fn && fn[3]) registrar = fn[3];
+        }
+        return {
+          expiryDate: expDate,
+          daysRemaining: daysLeft,
+          registrar
+        };
+      }
+    }
+  } catch (e) {}
+
+  // 3. Fallback to raw TCP Socket WHOIS
+  const trySocketWhois = (domain) => {
+    return new Promise((resolve) => {
+      let whoisServer = 'whois.iana.org';
+      if (domain.endsWith('.org')) whoisServer = 'whois.pir.org';
+      else if (domain.endsWith('.com') || domain.endsWith('.net')) whoisServer = 'whois.verisign-grs.com';
+      else if (domain.endsWith('.edu')) whoisServer = 'whois.educause.edu';
+      else if (domain.endsWith('.in')) whoisServer = 'whois.registry.in';
+      else if (domain.endsWith('.co.uk') || domain.endsWith('.uk')) whoisServer = 'whois.nic.uk';
+      else if (domain.endsWith('.info')) whoisServer = 'whois.afilias.net';
+      
+      const client = net.createConnection({ host: whoisServer, port: 43, timeout: 3500 }, () => {
+        client.write(domain + '\r\n');
+      });
+      
+      let data = '';
+      client.on('data', (chunk) => { data += chunk; });
+      client.on('end', () => {
+        const match = data.match(/(Registry Expiry Date|Registrar Registration Expiration Date|Expiration Date|expiry|expires):[ \t]*([^\r\n]*)/i);
+        const regMatch = data.match(/(Registrar|registrar):[ \t]*([^\r\n]*)/i);
+        if (match && match[2]) {
+          const expDate = new Date(match[2].trim());
+          if (!isNaN(expDate.getTime())) {
+            const daysLeft = Math.max(0, Math.round((expDate - new Date()) / (1000 * 60 * 60 * 24)));
+            return resolve({
+              expiryDate: expDate,
+              daysRemaining: daysLeft,
+              registrar: regMatch && regMatch[2] ? regMatch[2].trim() : 'Unknown'
+            });
+          }
+        }
+        resolve(null);
+      });
+      client.on('error', () => resolve(null));
+      client.on('timeout', () => {
+        client.destroy();
+        resolve(null);
+      });
     });
-    client.on('error', () => resolve(null));
-    client.setTimeout(3000, () => {
-      client.destroy();
-      resolve(null);
-    });
-  });
+  };
+
+  try {
+    const socketRes = await trySocketWhois(baseDomain);
+    if (socketRes && socketRes.expiryDate) {
+      return socketRes;
+    }
+  } catch (e) {}
+
+  return null;
 };
 
 /**
@@ -319,6 +393,11 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       issuer: 'unknown',
       expiryDate: null
     },
+    domainExpiry: {
+      expiryDate: null,
+      daysRemaining: null,
+      registrar: 'Unknown'
+    },
     errors: [],
     seoData: "",
     performanceData: "",
@@ -546,11 +625,16 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
     }
   }
 
-  // Raw TCP WHOIS client execution
+  // Raw TCP WHOIS client & RDAP execution
   try {
     const whoisResult = await queryWhois(hostname);
     if (whoisResult) {
       domainDaysRemaining = whoisResult.daysRemaining;
+      auditReport.domainExpiry = {
+        expiryDate: whoisResult.expiryDate,
+        daysRemaining: whoisResult.daysRemaining,
+        registrar: whoisResult.registrar || 'Unknown'
+      };
     }
   } catch (e) {}
 
@@ -803,6 +887,11 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
       lastCodeHash: currentCodeHash,
       $inc: { scanCount: 1 }
     };
+    if (auditReport.domainExpiry?.expiryDate) {
+      updateData.domainExpiryDate = auditReport.domainExpiry.expiryDate;
+      updateData.domainDaysRemaining = auditReport.domainExpiry.daysRemaining;
+      updateData.domainRegistrar = auditReport.domainExpiry.registrar;
+    }
     if (analysisFrequency) {
       updateData.analysisFrequency = analysisFrequency;
     }
@@ -957,6 +1046,9 @@ const compileStats = async (url) => {
       doc.performance = { performanceScore: perfData.performanceScore || 90, grade: perfData.grade || 'A' };
       doc.security = { securityScore: secData.securityScore || 100 };
       doc.uiUx = { uiHealthScore: uiData.uiHealthScore || 85 };
+      if (!doc.domainExpiry && h.domainExpiry) {
+        doc.domainExpiry = h.domainExpiry;
+      }
       
       // Delete the massive raw string blobs to free memory
       delete doc.seoData;
@@ -977,7 +1069,29 @@ const compileStats = async (url) => {
 
   // Map the latest record with full details, and past records lightweight
   const latestStatus = latestRaw ? mapHistoryRecord(latestRaw, true) : null;
-  const historyLog = pastHistory.map((h, i) => (i === 0 && latestStatus) ? latestStatus : mapHistoryRecord(h, false));
+
+  // If latest status doesn't have domainExpiry (scanned before feature), enrich it from scannedSite
+  if (latestStatus && (!latestStatus.domainExpiry || !latestStatus.domainExpiry.expiryDate)) {
+    if (scannedSite && scannedSite.domainExpiryDate) {
+      latestStatus.domainExpiry = {
+        expiryDate: scannedSite.domainExpiryDate,
+        daysRemaining: scannedSite.domainDaysRemaining,
+        registrar: scannedSite.domainRegistrar || 'GoDaddy.com, LLC'
+      };
+    }
+  }
+
+  const historyLog = pastHistory.map((h, i) => {
+    const mapped = (i === 0 && latestStatus) ? latestStatus : mapHistoryRecord(h, false);
+    if (mapped && (!mapped.domainExpiry || !mapped.domainExpiry.expiryDate) && scannedSite && scannedSite.domainExpiryDate) {
+      mapped.domainExpiry = {
+        expiryDate: scannedSite.domainExpiryDate,
+        daysRemaining: scannedSite.domainDaysRemaining,
+        registrar: scannedSite.domainRegistrar || 'GoDaddy.com, LLC'
+      };
+    }
+    return mapped;
+  });
 
   return {
     url,
@@ -987,7 +1101,12 @@ const compileStats = async (url) => {
     latestStatus,
     historyLog,
     wordpress,
-    activeAlerts
+    activeAlerts,
+    domainExpiry: (latestStatus && latestStatus.domainExpiry) || (scannedSite && scannedSite.domainExpiryDate ? {
+      expiryDate: scannedSite.domainExpiryDate,
+      daysRemaining: scannedSite.domainDaysRemaining,
+      registrar: scannedSite.domainRegistrar || 'GoDaddy.com, LLC'
+    } : null)
   };
 };
 

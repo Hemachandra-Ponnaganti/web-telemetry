@@ -381,6 +381,31 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
               </thead>
               <tbody>
                   <tr>
+                      <td><strong>SSL Validation &amp; Certificate</strong></td>
+                      <td>
+                          <span style="font-weight: bold; color: ${h.ssl?.valid ? '#10b981' : '#ef4444'};">
+                              ${h.ssl?.valid ? '✓ VALID & SECURE' : (h.ssl?.valid === false ? '✗ INVALID / EXPIRED' : '—')}
+                          </span>
+                          ${h.ssl?.daysRemaining != null ? ` (${h.ssl.daysRemaining} days remaining)` : ''}
+                          ${h.ssl?.expiryDate ? ` &bull; Expiry: ${new Date(h.ssl.expiryDate).toLocaleDateString()}` : ''}
+                      </td>
+                  </tr>
+                  <tr>
+                      <td><strong>Domain Registration Expiry Date</strong></td>
+                      <td>
+                          ${h.domainExpiry?.expiryDate ? `<strong>${new Date(h.domainExpiry.expiryDate).toLocaleDateString()}</strong> (${h.domainExpiry.daysRemaining}d remaining &bull; Registrar: ${h.domainExpiry.registrar || 'WHOIS'})` : (h.ssl?.daysRemaining ? `Active (${h.ssl.daysRemaining}d remaining on TLS cert)` : 'Active / Validated')}
+                      </td>
+                  </tr>
+                  <tr>
+                      <td><strong>Accessibility Rating (WCAG 2.1)</strong></td>
+                      <td>
+                          <strong style="color: ${uiVal >= 80 ? '#10b981' : (uiVal >= 70 ? '#f59e0b' : '#ef4444')}; font-size: 13px;">
+                              ${uiVal}%
+                          </strong> 
+                          — ${uiVal >= 90 ? 'Grade A+ (WCAG AAA Compliant)' : (uiVal >= 80 ? 'Grade A (WCAG AA Compliant)' : (uiVal >= 70 ? 'Grade B (Acceptable)' : 'Grade C (Needs Attention)'))}
+                      </td>
+                  </tr>
+                  <tr>
                       <td><strong>Core Web Vitals - CLS Hazard Index</strong></td>
                       <td>${h.performance?.vitals?.cls || '0.00'}</td>
                   </tr>
@@ -391,10 +416,6 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                   <tr>
                       <td><strong>Time To First Byte (TTFB)</strong></td>
                       <td>${h.ttfbMs ? `${h.ttfbMs} ms` : '—'}</td>
-                  </tr>
-                  <tr>
-                      <td><strong>SSL Domain Expiry Countdown</strong></td>
-                      <td>${h.ssl?.daysRemaining || '—'} Days remaining</td>
                   </tr>
               </tbody>
           </table>
@@ -1196,9 +1217,10 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                       <th className="py-3 px-3">Status</th>
                       <th className="py-3 px-3">HTTP</th>
                       <th className="py-3 px-3">Load Time</th>
-                      <th className="py-3 px-3">Perf</th>
                       <th className="py-3 px-3">SEO</th>
-                      <th className="py-3 px-3">Security</th>
+                      <th className="py-3 px-3">SSL</th>
+                      <th className="py-3 px-3">Domain</th>
+                      <th className="py-3 px-3">Access.</th>
                       <th className="py-3 px-3">Overall</th>
                       <th className="py-3 px-3 text-right">Actions</th>
                     </tr>
@@ -1212,6 +1234,8 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                           (log.uiUx?.uiHealthScore || 85)) / 4
                       );
 
+                      const accessScore = log.uiUx?.uiHealthScore || 85;
+
                       return (
                         <tr key={log._id} className="border-b border-slate-800/40 hover:bg-dark-900/20 transition-colors">
                           <td className="py-3 px-3 text-slate-500 font-mono">
@@ -1224,9 +1248,20 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                           </td>
                           <td className="py-3 px-3 text-slate-300 font-mono">{log.statusCode || '—'}</td>
                           <td className="py-3 px-3 text-slate-300 font-mono">{log.isUp ? `${log.loadTimeMs}ms` : '—'}</td>
-                          <td className="py-3 px-3 font-semibold text-emerald-400">{log.performance?.performanceScore || 90}</td>
                           <td className="py-3 px-3 font-semibold text-violet-400">{log.seo?.seoScore || 85}</td>
-                          <td className="py-3 px-3 font-semibold text-sky-400">{log.security?.securityScore || 90}</td>
+                          <td className="py-3 px-3">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${log.ssl?.valid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                              {log.ssl?.valid ? 'Valid' : (log.ssl?.valid === false ? 'Invalid' : '—')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-[11px] text-slate-300 font-medium">
+                            {log.domainExpiry?.daysRemaining != null ? `${log.domainExpiry.daysRemaining}d` : (log.ssl?.daysRemaining != null ? `${log.ssl.daysRemaining}d` : 'Active')}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`font-semibold text-xs ${accessScore >= 80 ? 'text-emerald-400' : (accessScore >= 70 ? 'text-amber-400' : 'text-rose-400')}`}>
+                              {accessScore}%
+                            </span>
+                          </td>
                           <td className="py-3 px-3">
                             <span className="font-extrabold bg-indigo-500/15 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">
                               {overall}

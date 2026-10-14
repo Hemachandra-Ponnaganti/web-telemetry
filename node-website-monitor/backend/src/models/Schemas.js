@@ -81,6 +81,11 @@ const monitorHistorySchema = new mongoose.Schema({
     issuer: { type: String },
     expiryDate: { type: Date }
   },
+  domainExpiry: {
+    expiryDate: { type: Date },
+    daysRemaining: { type: Number },
+    registrar: { type: String }
+  },
   errors: [{ type: String }],
   seoData: { type: String },
   performanceData: { type: String },
@@ -588,7 +593,10 @@ const scannedWebsiteSchema = new mongoose.Schema({
   analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' },
   lastSnapshotHash: { type: String },
   lastCodeHash: { type: String },
-  lastNameservers: [{ type: String }]
+  lastNameservers: [{ type: String }],
+  domainExpiryDate: { type: Date },
+  domainDaysRemaining: { type: Number },
+  domainRegistrar: { type: String }
 });
 
 const RealEmailAlertHistory = mongoose.model('RealEmailAlertHistory', emailAlertHistorySchema);
