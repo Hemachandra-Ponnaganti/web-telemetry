@@ -439,8 +439,8 @@ const analyzeSeo = async (url, htmlContent = '') => {
     keywordsMeta: { text: "", status: "warning", message: "No meta keywords tag detected." },
     headings: { h1: [], h2: [], h3: [], status: "ok", message: "Headings structure is valid." },
     canonical: { text: "", status: "ok", message: "Canonical tag verified." },
-    robotsTxt: { exists: false, status: "warning", message: "Robots.txt check skipped." },
-    sitemap: { exists: false, status: "warning", message: "Sitemap check skipped." },
+    robotsTxt: { exists: false, status: "warning", message: "Robots.txt check skipped.", lastModified: null, lastUpdated: null },
+    sitemap: { exists: false, status: "warning", message: "Sitemap check skipped.", lastModified: null, lastUpdated: null },
     openGraph: { ogTitle: "", ogImage: "", status: "warning", message: "No Open Graph tags detected." },
     twitterCard: { twitterCard: "", status: "warning", message: "No Twitter card tags detected." },
     indexability: { isIndexable: true, status: "ok", message: "Site is indexable by search engines." },
@@ -576,6 +576,17 @@ const analyzeSeo = async (url, htmlContent = '') => {
         reports.robotsTxt.exists = true;
         reports.robotsTxt.status = "ok";
         reports.robotsTxt.message = `Robots.txt found at ${robotsUrl} (${robotsResp.data.length} bytes).`;
+        
+        // Extract Last-Modified header if exposed by the server
+        const robotsLastModHeader = robotsResp.headers && (robotsResp.headers['last-modified'] || robotsResp.headers['Last-Modified']);
+        if (robotsLastModHeader) {
+          const parsed = new Date(robotsLastModHeader);
+          reports.robotsTxt.lastModified = !isNaN(parsed.getTime()) ? parsed.toISOString() : robotsLastModHeader;
+          reports.robotsTxt.lastUpdated = reports.robotsTxt.lastModified;
+        } else {
+          // If no Last-Modified header is provided by the HTTP server, record scan timestamp
+          reports.robotsTxt.lastChecked = new Date().toISOString();
+        }
       } else {
         reports.robotsTxt.exists = false;
         reports.robotsTxt.status = "warning";
@@ -603,8 +614,40 @@ const analyzeSeo = async (url, htmlContent = '') => {
       if (sitemapResp.status === 200) {
         reports.sitemap.exists = true;
         reports.sitemap.status = "ok";
-        const urlCount = (sitemapResp.data.match(/<url>/g) || []).length;
-        reports.sitemap.message = `Sitemap found at ${sitemapUrl} with ${urlCount} URLs.`;
+        const xmlData = typeof sitemapResp.data === 'string' ? sitemapResp.data : String(sitemapResp.data || '');
+        const urlCount = (xmlData.match(/<url>/g) || xmlData.match(/<sitemap>/g) || []).length;
+        reports.sitemap.message = `Sitemap found at ${sitemapUrl} with ${urlCount} indexed targets.`;
+
+        // Check for <lastmod> tag inside sitemap XML or Last-Modified HTTP header
+        const sitemapLastModHeader = sitemapResp.headers && (sitemapResp.headers['last-modified'] || sitemapResp.headers['Last-Modified']);
+        let extractedLastMod = null;
+
+        // Try extracting latest <lastmod> from XML body
+        const lastmodMatches = [...xmlData.matchAll(/<lastmod>(.*?)<\/lastmod>/gi)].map(m => m[1]?.trim()).filter(Boolean);
+        if (lastmodMatches.length > 0) {
+          // Pick the most recent lastmod date found in the sitemap
+          const validDates = lastmodMatches
+            .map(d => new Date(d))
+            .filter(d => !isNaN(d.getTime()))
+            .sort((a, b) => b - a);
+          
+          if (validDates.length > 0) {
+            extractedLastMod = validDates[0].toISOString();
+          } else {
+            extractedLastMod = lastmodMatches[0];
+          }
+        }
+
+        if (extractedLastMod) {
+          reports.sitemap.lastModified = extractedLastMod;
+          reports.sitemap.lastUpdated = extractedLastMod;
+        } else if (sitemapLastModHeader) {
+          const parsed = new Date(sitemapLastModHeader);
+          reports.sitemap.lastModified = !isNaN(parsed.getTime()) ? parsed.toISOString() : sitemapLastModHeader;
+          reports.sitemap.lastUpdated = reports.sitemap.lastModified;
+        } else {
+          reports.sitemap.lastChecked = new Date().toISOString();
+        }
       } else {
         reports.sitemap.exists = false;
         reports.sitemap.status = "warning";

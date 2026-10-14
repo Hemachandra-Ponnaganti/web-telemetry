@@ -3424,6 +3424,16 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">{robotsTxt?.message}</p>
+                {robotsTxt?.exists && (
+                  <div className="mt-2 pt-2 border-t border-emerald-900/30 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="text-slate-500 font-semibold uppercase text-[9px]">Last Modified:</span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {robotsTxt?.lastModified 
+                        ? new Date(robotsTxt.lastModified).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                        : (robotsTxt?.lastChecked ? 'Verified in recent scan (header not exposed)' : 'Verified')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3437,6 +3447,16 @@ export default function SeoDashboard({ seoData, crawlData = null, onNavigateToAl
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">{sitemap?.message}</p>
+                {sitemap?.exists && (
+                  <div className="mt-2 pt-2 border-t border-emerald-900/30 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="text-slate-500 font-semibold uppercase text-[9px]">Last Modified:</span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {sitemap?.lastModified 
+                        ? new Date(sitemap.lastModified).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                        : (sitemap?.lastChecked ? 'Verified in recent scan (header not exposed)' : 'Verified')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

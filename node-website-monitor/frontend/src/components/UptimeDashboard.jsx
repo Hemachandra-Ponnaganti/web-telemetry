@@ -742,7 +742,12 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                 <div className="flex flex-col items-center justify-center p-1.5 bg-slate-900/30 rounded border border-slate-800/40 text-center">
                   <span className="text-[8px] text-slate-500 font-bold uppercase block mb-1">robots.txt</span>
                   {robotsTxt?.exists ? (
-                    <span className="text-emerald-400 font-bold flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> Found</span>
+                    <>
+                      <span className="text-emerald-400 font-bold flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> Found</span>
+                      <span className="text-[8px] text-slate-400 font-mono mt-0.5" title={robotsTxt?.lastModified ? `Updated: ${new Date(robotsTxt.lastModified).toLocaleString()}` : 'Date header not provided by host'}>
+                        {robotsTxt?.lastModified ? new Date(robotsTxt.lastModified).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : (robotsTxt?.lastChecked ? 'Recent' : 'Active')}
+                      </span>
+                    </>
                   ) : (
                     <span className="text-amber-400 font-bold flex items-center gap-0.5"><AlertTriangle className="h-3 w-3" /> Missing</span>
                   )}
@@ -750,7 +755,12 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
                 <div className="flex flex-col items-center justify-center p-1.5 bg-slate-900/30 rounded border border-slate-800/40 text-center">
                   <span className="text-[8px] text-slate-500 font-bold uppercase block mb-1">sitemap</span>
                   {sitemap?.exists ? (
-                    <span className="text-emerald-400 font-bold flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> Found</span>
+                    <>
+                      <span className="text-emerald-400 font-bold flex items-center gap-0.5"><CheckCircle2 className="h-3 w-3" /> Found</span>
+                      <span className="text-[8px] text-slate-400 font-mono mt-0.5" title={sitemap?.lastModified ? `Updated: ${new Date(sitemap.lastModified).toLocaleString()}` : 'Date header not provided by host'}>
+                        {sitemap?.lastModified ? new Date(sitemap.lastModified).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : (sitemap?.lastChecked ? 'Recent' : 'Active')}
+                      </span>
+                    </>
                   ) : (
                     <span className="text-amber-400 font-bold flex items-center gap-0.5"><AlertTriangle className="h-3 w-3" /> Missing</span>
                   )}
