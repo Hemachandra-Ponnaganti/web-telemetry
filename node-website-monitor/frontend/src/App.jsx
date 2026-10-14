@@ -167,8 +167,12 @@ export default function App() {
   const [targetsLoading, setTargetsLoading] = useState(true);
 
   // Fetch unique audited SRE target list
-  const fetchTargets = async () => {
-    setTargetsLoading(true);
+  const fetchTargets = async (isSilent = false) => {
+    // Only show full skeleton loader if this is the initial load or explicit manual user action,
+    // NOT on background websocket syncs when targets are already loaded on screen
+    if (!isSilent || targets.length === 0) {
+      setTargetsLoading(true);
+    }
     try {
       const response = await axios.get(`${API_BASE}/targets`);
       if (Array.isArray(response.data)) {
@@ -328,7 +332,7 @@ export default function App() {
           !website.isFavorite ? `Pinned ${website.url} to favorites` : `Removed ${website.url} from favorites`,
           'success'
         );
-        fetchTargets();
+        fetchTargets(true);
       }
     } catch (err) {
       console.error(err);
@@ -606,7 +610,7 @@ export default function App() {
 
     // Handle full deep-audit completes (cron or manual run on another terminal)
     socket.on('auditCompleted', (freshStats) => {
-      fetchTargets();
+      fetchTargets(true);
       const normalizedCurrent = normalizeUrlString(urlRef.current);
       const normalizedAudit = normalizeUrlString(freshStats.url);
 
