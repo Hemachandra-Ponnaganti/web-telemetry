@@ -682,21 +682,41 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
   // Fire additional alerts for new monitoring features
   try {
     if (!seo.metaDescription?.text) {
-      await Alert.create({ url, category: 'seo', level: 'warning', message: 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.' });
-      await sendAlertEmailToWebsite(url, 'seo', 'warning', 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.');
+      const existingMetaAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Meta Description/i }, resolved: false });
+      if (!existingMetaAlert) {
+        await Alert.create({ url, category: 'seo', level: 'warning', message: 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.' });
+        await sendAlertEmailToWebsite(url, 'seo', 'warning', 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.');
+      }
     }
     const missingAltCount = (seo.imageAnalysis?.missingAlt || 0) + (seo.imageAnalysis?.emptyAlt || 0);
     if (missingAltCount > 0) {
-      await Alert.create({ url, category: 'seo', level: 'warning', message: `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text (accessibility & SEO issue).` });
-      await sendAlertEmailToWebsite(url, 'seo', 'warning', `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text.`);
+      const existingAltAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false });
+      if (!existingAltAlert) {
+        await Alert.create({ url, category: 'seo', level: 'warning', message: `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text (accessibility & SEO issue).` });
+        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text.`);
+      }
+    } else {
+      // Auto-resolve alt tag alerts if all images now have valid alt tags
+      await Alert.updateMany({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
     }
+
     if ((seo.links?.brokenCount || 0) > 0) {
-      await Alert.create({ url, category: 'seo', level: 'warning', message: `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found on the page. Fix to avoid SEO penalties.` });
-      await sendAlertEmailToWebsite(url, 'seo', 'warning', `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found. Fix to avoid SEO penalties.`);
+      // Only alert if there is no currently active broken link alert
+      const existingBrokenAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false });
+      if (!existingBrokenAlert) {
+        await Alert.create({ url, category: 'seo', level: 'warning', message: `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found on the page. Fix to avoid SEO penalties.` });
+        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found. Fix to avoid SEO penalties.`);
+      }
+    } else {
+      // Auto-resolve any previous broken link alerts since current scan confirmed 0 broken links!
+      await Alert.updateMany({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
     }
     // Score threshold alerts — fire if score drops below 60
     if (seo.seoScore !== undefined && seo.seoScore < 60) {
-      await sendAlertEmailToWebsite(url, 'seo', 'warning', `Low SEO Score: ${seo.seoScore}/100. Improve meta tags, headings, and content to boost search rankings.`);
+      const existingScoreAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Low SEO Score/i }, resolved: false });
+      if (!existingScoreAlert) {
+        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Low SEO Score: ${seo.seoScore}/100. Improve meta tags, headings, and content to boost search rankings.`);
+      }
     }
   } catch (e) {}
 

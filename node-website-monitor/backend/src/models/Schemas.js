@@ -480,6 +480,28 @@ const Alert = {
     }
     return null;
   },
+  updateMany: async (query = {}, updateData = {}) => {
+    if (isConnected()) return await RealAlert.updateMany(query, updateData);
+    let matched = 0;
+    inMemoryAlerts = inMemoryAlerts.map(a => {
+      let matches = true;
+      if (query.url && !matchUrlQuery(a.url, query.url)) matches = false;
+      if (query.category && a.category !== query.category) matches = false;
+      if (query.level && a.level !== query.level) matches = false;
+      if (query.resolved !== undefined && a.resolved !== query.resolved) matches = false;
+      if (query.message) {
+        if (query.message instanceof RegExp && !query.message.test(a.message)) matches = false;
+        if (typeof query.message === 'string' && a.message !== query.message) matches = false;
+      }
+      if (matches) {
+        matched++;
+        return { ...a, ...updateData };
+      }
+      return a;
+    });
+    if (matched > 0) saveToDisk();
+    return { modifiedCount: matched };
+  },
   deleteMany: async (query = {}) => {
     if (isConnected()) return await RealAlert.deleteMany(query);
     const before = inMemoryAlerts.length;
