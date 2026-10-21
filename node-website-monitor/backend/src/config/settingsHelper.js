@@ -31,6 +31,7 @@ const loadSettings = () => {
     email_host_user: process.env.EMAIL_HOST_USER || '',
     email_host_password: process.env.EMAIL_HOST_PASSWORD || '',
     alert_email_recipients: process.env.ALERT_EMAIL_RECIPIENTS || '',
+    email_from: process.env.EMAIL_FROM || '',
     resend_api_key: process.env.RESEND_API_KEY || '',
     resend_from_email: process.env.RESEND_FROM_EMAIL || '',
     alerts_enabled: process.env.ALERTS_ENABLED !== 'false'
@@ -48,6 +49,7 @@ const loadSettings = () => {
 
   // Ensure env vars take priority if set
   if (process.env.RESEND_API_KEY) settings.resend_api_key = process.env.RESEND_API_KEY;
+  if (process.env.EMAIL_FROM) settings.email_from = process.env.EMAIL_FROM;
   if (process.env.EMAIL_HOST_USER) settings.email_host_user = process.env.EMAIL_HOST_USER;
   if (process.env.EMAIL_HOST_PASSWORD) settings.email_host_password = process.env.EMAIL_HOST_PASSWORD;
   if (process.env.CRITICAL_EMAIL) settings.critical_email = process.env.CRITICAL_EMAIL;

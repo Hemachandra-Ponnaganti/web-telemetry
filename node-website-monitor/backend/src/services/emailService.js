@@ -213,7 +213,7 @@ const processEmail = async (email) => {
         }
       );
       
-      const senderEmail = hostUser;
+      const senderEmail = settings.email_from || process.env.EMAIL_FROM || hostUser;
       const senderDisplayName = 'MonitorPro SRE';
       const fromAddress = `"${senderDisplayName}" <${senderEmail}>`;
       
