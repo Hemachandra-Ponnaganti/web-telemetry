@@ -6,7 +6,7 @@ const { MonitorHistory, WordPressMonitor, Alert } = require('../models/Schemas')
  * Trigger immediate site uptime and WordPress health audits concurrently.
  */
 const triggerAudit = async (req, res) => {
-  const { url, analysisFrequency } = req.body;
+  const { url, analysisFrequency, serviceType } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'Missing target URL in request body.' });
   }
@@ -14,11 +14,14 @@ const triggerAudit = async (req, res) => {
   try {
     const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
     
-    // Concurrent execution of uptime check and WordPress crawler
-    await Promise.all([
-      checkWebsiteStatus(normalizedUrl, analysisFrequency),
-      auditWordPressSite(normalizedUrl).catch(() => null) // WordPress check can return null if not wordpress site
-    ]);
+    // Concurrent execution of uptime check and WordPress crawler (skip WP audit if hosting service)
+    const promises = [
+      checkWebsiteStatus(normalizedUrl, analysisFrequency, serviceType)
+    ];
+    if (serviceType !== 'hosting') {
+      promises.push(auditWordPressSite(normalizedUrl).catch(() => null));
+    }
+    await Promise.all(promises);
 
     // Gather newly compiled stats
     const freshStats = await compileStats(normalizedUrl);
@@ -184,7 +187,8 @@ const getMonitoredTargets = async (req, res) => {
           lastScannedAt: t.lastScannedAt,
           scanCount: t.scanCount || 1,
           isFavorite: !!t.isFavorite,
-          analysisFrequency: t.analysisFrequency || '1h'
+          analysisFrequency: t.analysisFrequency || '1h',
+          serviceType: t.serviceType || 'maintenance'
         });
       }
     }

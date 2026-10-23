@@ -19,6 +19,7 @@ export default function WebsitesCatalog({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newUrlInput, setNewUrlInput] = useState('');
   const [analysisFrequency, setAnalysisFrequency] = useState('1h'); // '1h' | '3h' | '6h' | '12h' | '24h'
+  const [serviceType, setServiceType] = useState('maintenance'); // 'hosting' | 'maintenance'
   const [addError, setAddError] = useState('');
   const [submittingAdd, setSubmittingAdd] = useState(false);
 
@@ -34,12 +35,15 @@ export default function WebsitesCatalog({
     if (filterMode === 'favorites') return t.isFavorite;
     if (filterMode === 'online') return t.isUp;
     if (filterMode === 'offline') return !t.isUp;
+    if (filterMode === 'hosting') return t.serviceType === 'hosting';
+    if (filterMode === 'maintenance') return (t.serviceType || 'maintenance') === 'maintenance';
     return true;
   });
 
   const handleOpenAddModal = () => {
     setNewUrlInput('');
     setAnalysisFrequency('1h');
+    setServiceType('maintenance');
     setAddError('');
     setIsAddModalOpen(true);
   };
@@ -48,6 +52,7 @@ export default function WebsitesCatalog({
     setIsAddModalOpen(false);
     setNewUrlInput('');
     setAnalysisFrequency('1h');
+    setServiceType('maintenance');
     setAddError('');
   };
 
@@ -66,7 +71,7 @@ export default function WebsitesCatalog({
     setAddError('');
 
     try {
-      await onAddWebsite(val, analysisFrequency);
+      await onAddWebsite(val, analysisFrequency, serviceType);
       setIsAddModalOpen(false);
       setNewUrlInput('');
     } catch (err) {
@@ -150,6 +155,8 @@ export default function WebsitesCatalog({
         <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           {[
             { id: 'all', label: 'All Sites' },
+            { id: 'maintenance', label: '🛠️ Maintenance' },
+            { id: 'hosting', label: '☁️ Hosting' },
             { id: 'favorites', label: 'Favorites' },
             { id: 'online', label: 'Online' },
             { id: 'offline', label: 'Down / Alerts' }
@@ -328,7 +335,14 @@ export default function WebsitesCatalog({
 
                       <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
                         <p className="text-xs text-slate-500 font-mono truncate">{site.url}</p>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
+                            site.serviceType === 'hosting'
+                              ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300'
+                              : 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                          }`}>
+                            {site.serviceType === 'hosting' ? '☁️ Hosting' : '🛠️ Maintenance'}
+                          </span>
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
                             site.malwareStatus === 'malware' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
                             site.malwareStatus === 'suspicious' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
@@ -459,6 +473,58 @@ export default function WebsitesCatalog({
                       {preset}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Service Type Tracking Selector */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <label className="text-xs font-bold text-slate-300 block mb-2">
+                  Service Tracking Type
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setServiceType('maintenance')}
+                    className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                      serviceType === 'maintenance'
+                        ? 'bg-purple-500/15 border-purple-500 text-white shadow-lg shadow-purple-500/10'
+                        : 'bg-dark-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-extrabold text-xs text-purple-300 flex items-center gap-1.5">
+                        🛠️ Website Maintenance
+                      </span>
+                      {serviceType === 'maintenance' && (
+                        <span className="h-2 w-2 rounded-full bg-purple-400" />
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      All features included: Uptime, SSL, Malware, SEO, Performance, Database, Accessibility & WP.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setServiceType('hosting')}
+                    className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                      serviceType === 'hosting'
+                        ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-lg shadow-cyan-500/10'
+                        : 'bg-dark-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-extrabold text-xs text-cyan-300 flex items-center gap-1.5">
+                        ☁️ Hosting Service
+                      </span>
+                      {serviceType === 'hosting' && (
+                        <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Dedicated hosting tracking: Uptime, SSL, and Malware Scan only.
+                    </p>
+                  </button>
                 </div>
               </div>
 

@@ -617,6 +617,7 @@ const scannedWebsiteSchema = new mongoose.Schema({
   scanCount: { type: Number, default: 1 },
   isFavorite: { type: Boolean, default: false },
   analysisFrequency: { type: String, enum: ['1h', '3h', '6h', '12h', '24h'], default: '1h' },
+  serviceType: { type: String, enum: ['hosting', 'maintenance'], default: 'maintenance' },
   lastSnapshotHash: { type: String },
   lastCodeHash: { type: String },
   lastNameservers: [{ type: String }],
@@ -727,6 +728,7 @@ const ScannedWebsite = {
       scanCount: 1,
       isFavorite: false,
       analysisFrequency: '1h',
+      serviceType: 'maintenance',
       lastScannedAt: new Date(),
       _id: 'sw_' + Math.random().toString(36).substr(2, 9),
       ...data
@@ -804,7 +806,7 @@ const ScannedWebsite = {
         }
         delete initialFields.$inc;
       }
-      const doc = { url: query.url, name: '', isUp: true, statusCode: 200, scanCount: 1, isFavorite: false, analysisFrequency: '1h', lastScannedAt: new Date(), _id: 'sw_' + Math.random().toString(36).substr(2, 9), ...initialFields };
+      const doc = { url: query.url, name: '', isUp: true, statusCode: 200, scanCount: 1, isFavorite: false, analysisFrequency: '1h', serviceType: 'maintenance', lastScannedAt: new Date(), _id: 'sw_' + Math.random().toString(36).substr(2, 9), ...initialFields };
       inMemoryScannedWebsites.push(doc);
       saveToDisk();
       return doc;

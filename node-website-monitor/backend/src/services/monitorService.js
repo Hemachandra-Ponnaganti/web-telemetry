@@ -376,12 +376,22 @@ const checkSslCertificate = (hostname) => {
  * @param {string} url - Target website domain URL.
  * @returns {Promise<object>} Complete SRE telemetry report.
  */
-const checkWebsiteStatus = async (url, analysisFrequency) => {
+const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
   const parsed = new URL(url);
   const hostname = parsed.hostname;
   
+  // Resolve serviceType: check passed param or existing record in DB
+  const { ScannedWebsite } = require('../models/Schemas');
+  let effectiveServiceType = serviceType;
+  if (!effectiveServiceType) {
+    const existing = await ScannedWebsite.findOne({ url });
+    effectiveServiceType = existing?.serviceType || 'maintenance';
+  }
+  const isHostingOnly = effectiveServiceType === 'hosting';
+
   const auditReport = {
     url,
+    serviceType: effectiveServiceType,
     isUp: false,
     statusCode: null,
     loadTimeMs: 0,
@@ -915,6 +925,9 @@ const checkWebsiteStatus = async (url, analysisFrequency) => {
     if (analysisFrequency) {
       updateData.analysisFrequency = analysisFrequency;
     }
+    if (effectiveServiceType) {
+      updateData.serviceType = effectiveServiceType;
+    }
     await ScannedWebsite.findOneAndUpdate(
       { url },
       updateData,
@@ -1115,6 +1128,7 @@ const compileStats = async (url) => {
 
   return {
     url,
+    serviceType: scannedSite?.serviceType || 'maintenance',
     analysisFrequency,
     uptimePercentage,
     totalChecks,
@@ -1156,7 +1170,8 @@ const startUptimeScheduler = (io) => {
         // Only run audit if configured frequency duration has elapsed since last scan
         if (!lastScannedTime || (now - lastScannedTime >= requiredIntervalMs)) {
           console.log(`🔄 Cron Auditer: Running scheduled ${freqHours}h performance audit for ${siteUrl}...`);
-          await checkWebsiteStatus(siteUrl, freqStr);
+          const sType = typeof site === 'object' ? (site.serviceType || 'maintenance') : 'maintenance';
+          await checkWebsiteStatus(siteUrl, freqStr, sType);
           if (io) {
             const freshStats = await compileStats(siteUrl);
             io.emit('auditCompleted', freshStats);

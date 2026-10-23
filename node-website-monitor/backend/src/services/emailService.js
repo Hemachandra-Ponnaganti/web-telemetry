@@ -498,17 +498,23 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
 
     const subject = `[MonitorPro] Weekly Executive Health & Reliability Report: ${url}`;
     
-    // Extract website details from ScannedWebsite
+    // Extract website details and serviceType from ScannedWebsite
     let domainExpiryDateStr = '';
     let domainRegistrarStr = '';
+    let siteServiceType = 'maintenance';
     try {
       const { ScannedWebsite } = require('../models/Schemas');
       const siteDoc = await ScannedWebsite.findOne({ url });
-      if (siteDoc && siteDoc.domainExpiryDate) {
-        domainExpiryDateStr = `${new Date(siteDoc.domainExpiryDate).toLocaleDateString()}${siteDoc.domainDaysRemaining != null ? ` (${siteDoc.domainDaysRemaining}d remaining)` : ''}`;
-        domainRegistrarStr = siteDoc.domainRegistrar || 'GoDaddy / WHOIS';
+      if (siteDoc) {
+        if (siteDoc.serviceType) siteServiceType = siteDoc.serviceType;
+        if (siteDoc.domainExpiryDate) {
+          domainExpiryDateStr = `${new Date(siteDoc.domainExpiryDate).toLocaleDateString()}${siteDoc.domainDaysRemaining != null ? ` (${siteDoc.domainDaysRemaining}d remaining)` : ''}`;
+          domainRegistrarStr = siteDoc.domainRegistrar || 'GoDaddy / WHOIS';
+        }
       }
     } catch (e) {}
+
+    const isHostingService = (stats?.serviceType === 'hosting') || (siteServiceType === 'hosting');
 
     const latest = stats.latestStatus || (stats.historyLog && stats.historyLog[0]) || {};
     const sslValid = latest.ssl?.valid === true;
@@ -539,14 +545,26 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
     const accessibilityScore = latest.uiUx?.uiHealthScore || 85;
 
     // 1. Overall Health Score Calculation
-    // Weighted formula: Uptime (35%), Performance (25%), Security (20%), SEO (10%), Accessibility (10%)
-    const weightedHealth = Math.round(
-      (uptimePct * 0.35) + 
-      (perfScore * 0.25) + 
-      (secScore * 0.20) + 
-      (seoScore * 0.10) + 
-      (accessibilityScore * 0.10)
-    );
+    // For Hosting Services: Focus 100% on infrastructure reliability (Uptime 50%, SSL Security 30%, Malware Cleanliness 20%)
+    // For Maintenance: Weighted formula across full web development & marketing stack
+    let weightedHealth = 95;
+    if (isHostingService) {
+      const sslScoreCalc = sslValid ? (sslDays > 14 ? 100 : (sslDays > 0 ? 70 : 30)) : 20;
+      const malwareScoreCalc = (latest.malware?.status === 'clean' || !latest.malware?.findings?.length) ? 100 : 40;
+      weightedHealth = Math.round(
+        (uptimePct * 0.50) + 
+        (sslScoreCalc * 0.30) + 
+        (malwareScoreCalc * 0.20)
+      );
+    } else {
+      weightedHealth = Math.round(
+        (uptimePct * 0.35) + 
+        (perfScore * 0.25) + 
+        (secScore * 0.20) + 
+        (seoScore * 0.10) + 
+        (accessibilityScore * 0.10)
+      );
+    }
     const overallHealthScore = Math.max(10, Math.min(100, weightedHealth || 92));
     const healthGrade = overallHealthScore >= 90 ? 'Excellent' :
                         overallHealthScore >= 80 ? 'Good' :
@@ -648,10 +666,14 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
     } else {
       highlights.push(`Recorded <strong>${uptimePct}% uptime</strong> with ${incidentCount} intermittent incident(s) detected and recovered.`);
     }
-    if (desktopVitals.lcp && mobileVitals.lcp) {
-      highlights.push(`Average desktop load time is <strong>${desktopVitals.lcp}s</strong> compared to <strong>${mobileVitals.lcp}s</strong> on mobile 4G networks.`);
+    if (!isHostingService) {
+      if (desktopVitals.lcp && mobileVitals.lcp) {
+        highlights.push(`Average desktop load time is <strong>${desktopVitals.lcp}s</strong> compared to <strong>${mobileVitals.lcp}s</strong> on mobile 4G networks.`);
+      } else {
+        highlights.push(`Average page response latency averaged <strong>${avgLoadTimeMs}ms</strong> across all geographic probes.`);
+      }
     } else {
-      highlights.push(`Average page response latency averaged <strong>${avgLoadTimeMs}ms</strong> across all geographic probes.`);
+      highlights.push(`Network server response latency averaged <strong>${avgLoadTimeMs}ms</strong> across health probes.`);
     }
     if (sslDays <= 14) {
       highlights.push(`<span style="color:#b91c1c;">SSL certificate expires in <strong>${sslDays} days</strong> (${sslExpiryDate}). Renewal recommended promptly.</span>`);
@@ -800,13 +822,17 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
       <table style="width:100%;border-collapse:collapse;">
         <tr>
           <td>
-            <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:6px;">Weekly Telemetry &amp; SRE Report</div>
-            <div style="font-size:24px;font-weight:900;letter-spacing:-0.02em;margin-bottom:6px;">Weekly Website Health Report</div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#a5b4fc;margin-bottom:6px;">
+              ${isHostingService ? 'Hosting Infrastructure SRE Report' : 'Weekly Telemetry &amp; SRE Report'}
+            </div>
+            <div style="font-size:24px;font-weight:900;letter-spacing:-0.02em;margin-bottom:6px;">
+              ${isHostingService ? 'Weekly Hosting Reliability Report' : 'Weekly Website Health Report'}
+            </div>
             <div style="font-size:13px;color:#cbd5e1;">Target Domain: <strong style="color:#ffffff;">${url}</strong></div>
           </td>
           <td style="text-align:right;vertical-align:top;">
             <span style="display:inline-block;padding:6px 12px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:11px;font-weight:700;color:#ffffff;">
-              7-Day Summary
+              ${isHostingService ? '☁️ Hosting Suite' : '7-Day Summary'}
             </span>
           </td>
         </tr>
@@ -843,7 +869,9 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
             <td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;text-align:center;">
               <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#64748b;letter-spacing:0.05em;margin-bottom:4px;">Avg Response Speed</div>
               <div style="font-size:32px;font-weight:900;color:#4f46e5;line-height:1;">${avgLoadTimeMs}<span style="font-size:16px;">ms</span></div>
-              <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:6px;">Desktop ${desktopVitals.lcp || 1.3}s · Mob ${mobileVitals.lcp || 2.4}s</div>
+              <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:6px;">
+                ${isHostingService ? `TTFB ${latest.ttfbMs || 120}ms · Latency` : `Desktop ${desktopVitals.lcp || 1.3}s · Mob ${mobileVitals.lcp || 2.4}s`}
+              </div>
             </td>
           </tr>
         </table>
@@ -857,13 +885,13 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         </div>
       </div>
 
-      <!-- SECTION 2: AVAILABILITY & RELIABILITY -->
+      <!-- SECTION 2: AVAILABILITY & RELIABILITY (UPTIME & SSL) -->
       <div style="margin-bottom:32px;">
         <div style="font-size:16px;font-weight:900;color:#0f172a;margin-bottom:4px;border-bottom:2px solid #059669;padding-bottom:6px;">
-          2. Availability &amp; Reliability (The Basics)
+          ${isHostingService ? '2. Uptime &amp; SSL Tracking' : '2. Availability &amp; Reliability (The Basics)'}
         </div>
         <div style="font-size:12px;color:#64748b;margin-bottom:14px;">
-          Continuous monitoring verifying your site is up, serving customers, and keeping security valid.
+          ${isHostingService ? 'Continuous server reachability, response latency, and SSL encryption verification.' : 'Continuous monitoring verifying your site is up, serving customers, and keeping security valid.'}
         </div>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
@@ -895,6 +923,10 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
                     <td style="text-align:right;font-weight:800;color:${sslDays <= 14 ? '#ef4444' : '#0f172a'};padding-bottom:6px;">${sslDaysRemaining} (Expires: ${sslExpiryDate})</td>
                   </tr>
                   <tr>
+                    <td style="color:#64748b;padding-bottom:6px;">SSL Certificate Issuer:</td>
+                    <td style="text-align:right;font-weight:800;color:#0f172a;padding-bottom:6px;">${sslIssuer}</td>
+                  </tr>
+                  <tr>
                     <td style="color:#64748b;">Domain Expiry Status:</td>
                     <td style="text-align:right;font-weight:800;color:#0f172a;">${domainExpiryDateStr || 'Active'}</td>
                   </tr>
@@ -905,7 +937,8 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         </table>
       </div>
 
-      <!-- SECTION 3: PERFORMANCE & SPEED -->
+      ${!isHostingService ? `
+      <!-- SECTION 3: PERFORMANCE & SPEED (MAINTENANCE ONLY) -->
       <div style="margin-bottom:32px;">
         <div style="font-size:16px;font-weight:900;color:#0f172a;margin-bottom:4px;border-bottom:2px solid #f59e0b;padding-bottom:6px;">
           3. Performance &amp; Speed (User Experience)
@@ -969,14 +1002,15 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
           </table>
         </div>
       </div>
+      ` : ''}
 
-      <!-- SECTION 4: SECURITY & COMPLIANCE -->
+      <!-- SECTION: SECURITY & MALWARE SCAN -->
       <div style="margin-bottom:32px;">
         <div style="font-size:16px;font-weight:900;color:#0f172a;margin-bottom:4px;border-bottom:2px solid #6366f1;padding-bottom:6px;">
-          4. Security &amp; Compliance
+          ${isHostingService ? '3. Malware Scan &amp; Server Security' : '4. Security &amp; Compliance'}
         </div>
         <div style="font-size:12px;color:#64748b;margin-bottom:14px;">
-          Continuous asset protection, vulnerability detection, and perimeter defense audits.
+          ${isHostingService ? 'Deep malware detection, file integrity inspection, and perimeter server defenses.' : 'Continuous asset protection, vulnerability detection, and perimeter defense audits.'}
         </div>
 
         <table style="width:100%;border-collapse:separate;border-spacing:8px;table-layout:fixed;">
@@ -1000,7 +1034,8 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         </table>
       </div>
 
-      <!-- SECTION 5: SEO & TRAFFIC SNAPSHOT -->
+      ${!isHostingService ? `
+      <!-- SECTION 5: SEO & TRAFFIC SNAPSHOT (MAINTENANCE ONLY) -->
       <div style="margin-bottom:28px;">
         <div style="font-size:16px;font-weight:900;color:#0f172a;margin-bottom:4px;border-bottom:2px solid #0ea5e9;padding-bottom:6px;">
           5. SEO &amp; Traffic Snapshot
@@ -1057,10 +1092,11 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
           </table>
         </div>
       </div>
+      ` : ''}
 
       <!-- Action Footer -->
       <div style="background:#f8fafc;border-radius:8px;padding:16px;border:1px solid #e2e8f0;font-size:12px;color:#64748b;line-height:1.5;">
-        This automated weekly executive health report is generated by <strong>MonitorPro SRE</strong>. All metrics reflect live automated telemetry, synthetic PageSpeed measurements, and technical health checks. To adjust your alert settings or change reporting frequency, please visit your dashboard.
+        This automated weekly ${isHostingService ? 'hosting reliability' : 'executive health'} report is generated by <strong>MonitorPro SRE</strong>. All metrics reflect live automated telemetry, synthetic PageSpeed measurements, and technical health checks. To adjust your alert settings or change reporting frequency, please visit your dashboard.
       </div>
 
     </div>
@@ -1074,8 +1110,34 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
 </body>
 </html>`;
 
-    const plainTextReport = `Weekly Website Health & Reliability Report: ${url}
+    let plainTextReport = '';
+    if (isHostingService) {
+      plainTextReport = `Weekly Hosting Health & Reliability Report: ${url}
 Report Date: ${new Date().toLocaleDateString()}
+Service Tracking: Dedicated Hosting Service
+
+1. Executive Summary & Health Score
+• Health Score: ${overallHealthScore}% (${healthGrade})
+• Uptime: ${uptimePct}%
+• Average Response Latency: ${avgLoadTimeMs}ms
+• Highlights:
+${highlights.map(h => '  - ' + h.replace(/<[^>]*>/g, '')).join('\n')}
+
+2. Uptime & SSL Tracking
+• Uptime: ${uptimePct}%
+• Outages: ${incidentCount} event(s)
+• SSL Certificate: ${sslStatusText} (${sslDaysRemaining})
+• Domain Status: ${domainExpiryDateStr}
+
+3. Malware Scan & Server Security
+• Security Score: ${secScore}/100
+• Malware Scans: ${scansRunCount} (${isClean ? 'Clean' : `${threatsDetected} threats detected`})
+
+Generated by MonitorPro SRE.`;
+    } else {
+      plainTextReport = `Weekly Website Health & Reliability Report: ${url}
+Report Date: ${new Date().toLocaleDateString()}
+Service Tracking: Full Website Maintenance
 
 1. Executive Summary & Health Score
 • Health Score: ${overallHealthScore}% (${healthGrade})
@@ -1104,6 +1166,7 @@ ${highlights.map(h => '  - ' + h.replace(/<[^>]*>/g, '')).join('\n')}
 • Server Error Rates: ${server5xxCount}
 
 Generated by MonitorPro SRE.`;
+    }
 
     await enqueueEmailAlert({
       url,
@@ -1112,12 +1175,12 @@ Generated by MonitorPro SRE.`;
       category: 'report',
       level: 'info',
       subject,
-      message: 'Weekly website health report generated.',
+      message: `${isHostingService ? 'Hosting' : 'Weekly website'} health report generated.`,
       text: plainTextReport,
       html
     });
     
-    console.log(`📧 Queued periodic report email for ${url} to ${recipient}${cc ? ` (CC: ${cc})` : ''}`);
+    console.log(`📧 Queued periodic report email for ${url} to ${recipient}${cc ? ` (CC: ${cc})` : ''} [Service: ${isHostingService ? 'Hosting' : 'Maintenance'}]`);
   } catch (err) {
     console.error('❌ Error sending periodic report email:', err.message);
   }

@@ -113,13 +113,13 @@ export default function App() {
     setActiveTab('uptime');
   };
 
-  const handleAddWebsite = async (newUrl, analysisFrequency = '1h') => {
+  const handleAddWebsite = async (newUrl, analysisFrequency = '1h', serviceType = 'maintenance') => {
     let formattedUrl = newUrl.trim();
     if (!/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
     setUrl(formattedUrl);
-    await handleRunAudit(formattedUrl, analysisFrequency);
+    await handleRunAudit(formattedUrl, analysisFrequency, serviceType);
     setViewMode('detail');
     setActiveTab('uptime');
   };
@@ -472,7 +472,7 @@ export default function App() {
   };
 
   // Trigger an immediate, concurrent SRE audit run
-  const handleRunAudit = async (overrideUrl, analysisFrequency) => {
+  const handleRunAudit = async (overrideUrl, analysisFrequency, serviceType) => {
     const rawTarget = typeof overrideUrl === 'string' ? overrideUrl : url;
     if (!rawTarget || typeof rawTarget !== 'string' || !rawTarget.trim()) {
       showToast('Please specify a valid website URL', 'error');
@@ -514,7 +514,7 @@ export default function App() {
     }, 900);
 
     try {
-      const response = await axios.post(`${API_BASE}/audit`, { url: formattedUrl, analysisFrequency });
+      const response = await axios.post(`${API_BASE}/audit`, { url: formattedUrl, analysisFrequency, serviceType });
       clearInterval(stepTimer);
       setScanProgress({ label: 'Scan Complete!', pct: 100 });
 
@@ -733,35 +733,45 @@ export default function App() {
 
               <div className="my-1 border-t border-slate-800/60" />
 
-              {[
-                { id: 'uptime', label: 'Uptime & Logs', icon: Activity },
-                { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2 },
-                { id: 'seo', label: 'SEO Optimization', icon: Globe },
-                { id: 'ssl', label: 'SSL & Security', icon: Shield },
-                { id: 'malware', label: 'Malware Scan', icon: ShieldAlert },
-                { id: 'database', label: 'Database Monitoring', icon: Database },
-                { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon },
-                { id: 'accessibility', label: 'Accessibility', icon: Eye },
-                { id: 'wordpress', label: 'WordPress CMS', icon: Layers },
-                { id: 'domain_expiry', label: 'Domain Details', icon: CalendarClock },
-                { id: 'email_alerts', label: 'Email Alerts', icon: Mail },
-                { id: 'settings', label: 'Gmail & Alerts', icon: Settings },
-              ].map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => { setViewMode('detail'); setActiveTab(id); setSidebarOpen(false); }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${viewMode === 'detail' && activeTab === id
-                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-                    }`}
-                >
-                  <Icon className={`h-4 w-4 shrink-0 transition-colors ${viewMode === 'detail' && activeTab === id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                  <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">{label}</span>
-                  {viewMode === 'detail' && activeTab === id && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
-                  )}
-                </button>
-              ))}
+              {(() => {
+                const currentTarget = targets.find(t => normalizeUrlString(t.url) === normalizeUrlString(url));
+                const currentServiceType = safeStats?.serviceType || currentTarget?.serviceType || 'maintenance';
+                const isHosting = currentServiceType === 'hosting';
+
+                const allTabs = [
+                  { id: 'uptime', label: 'Uptime & Logs', icon: Activity, hosting: true },
+                  { id: 'ssl', label: 'SSL & Security', icon: Shield, hosting: true },
+                  { id: 'malware', label: 'Malware Scan', icon: ShieldAlert, hosting: true },
+                  { id: 'site_analysis', label: 'Site Analysis', icon: BarChart2, hosting: false },
+                  { id: 'seo', label: 'SEO Optimization', icon: Globe, hosting: false },
+                  { id: 'database', label: 'Database Monitoring', icon: Database, hosting: false },
+                  { id: 'image_analyzer', label: 'Image Optimization', icon: ImageIcon, hosting: false },
+                  { id: 'accessibility', label: 'Accessibility', icon: Eye, hosting: false },
+                  { id: 'wordpress', label: 'WordPress CMS', icon: Layers, hosting: false },
+                  { id: 'domain_expiry', label: 'Domain Details', icon: CalendarClock, hosting: false },
+                  { id: 'email_alerts', label: 'Email Alerts', icon: Mail, hosting: true },
+                  { id: 'settings', label: 'Gmail & Alerts', icon: Settings, hosting: true },
+                ];
+
+                const visibleTabs = isHosting ? allTabs.filter(t => t.hosting) : allTabs;
+
+                return visibleTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => { setViewMode('detail'); setActiveTab(id); setSidebarOpen(false); }}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer group w-full ${viewMode === 'detail' && activeTab === id
+                      ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                      }`}
+                  >
+                    <Icon className={`h-4 w-4 shrink-0 transition-colors ${viewMode === 'detail' && activeTab === id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                    <span className="text-[11px] font-bold uppercase tracking-wide leading-tight">{label}</span>
+                    {viewMode === 'detail' && activeTab === id && (
+                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-400 shrink-0" />
+                    )}
+                  </button>
+                ));
+              })()}
 
               {/* Divider */}
               <div className="my-2 border-t border-slate-800/60" />
@@ -839,19 +849,31 @@ export default function App() {
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-1">AUDIT TARGET SOURCE</span>
                     <h2 className="text-xl font-extrabold text-slate-200 tracking-tight">{safeStats.url}</h2>
                   </div>
-                  <div className="flex gap-6">
+                  <div className="flex gap-6 items-center flex-wrap">
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">Service Type</span>
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider border ${
+                        safeStats.serviceType === 'hosting'
+                          ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                          : 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                      }`}>
+                        {safeStats.serviceType === 'hosting' ? '☁️ HOSTING SERVICE' : '🛠️ WEBSITE MAINTENANCE'}
+                      </span>
+                    </div>
                     <div className="text-right">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">Core Status</span>
                       <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${safeStats.latestStatus?.isUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}`}>
                         {safeStats.latestStatus?.isUp ? 'ACTIVE' : 'DOWN'}
                       </span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">WordPress Core</span>
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${safeStats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
-                        {safeStats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
-                      </span>
-                    </div>
+                    {safeStats.serviceType !== 'hosting' && (
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block">WordPress Core</span>
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[9px] mt-1.5 tracking-wider ${safeStats.wordpress?.isWordPress ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-slate-800 text-slate-400 border border-slate-750'}`}>
+                          {safeStats.wordpress?.isWordPress ? 'DETECTED' : 'NONE'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
