@@ -316,7 +316,7 @@ router.post('/test-site-email', async (req, res) => {
           </p>
         </div>
         <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:12px 24px;font-size:10px;color:#94a3b8;text-align:center;">
-          MonitorPro SRE Dashboard · Automated Alert System
+          GA Web Telemetry SRE Dashboard · Automated Alert System
         </div>
       </div>
     </body></html>`;

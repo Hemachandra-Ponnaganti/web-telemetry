@@ -109,6 +109,18 @@ export default function App() {
   const handleSelectWebsite = (siteUrl) => {
     setUrl(siteUrl);
     fetchStats(siteUrl);
+    setCrawlData(null);
+    setCrawlLoading(true);
+    let formattedUrl = siteUrl.trim();
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+    axios.post(`${API_BASE}/crawl`, { url: formattedUrl })
+      .then(crawlResp => {
+        if (crawlResp.data.success) setCrawlData(crawlResp.data);
+      })
+      .catch(() => { })
+      .finally(() => setCrawlLoading(false));
     setViewMode('detail');
     setActiveTab('uptime');
   };
@@ -659,11 +671,11 @@ export default function App() {
             </button>
 
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-600/25 shrink-0">
-                M
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-600/25 shrink-0 text-xs">
+                GA
               </div>
               <div>
-                <h1 className="text-sm font-extrabold tracking-tight">MonitorPro</h1>
+                <h1 className="text-sm font-extrabold tracking-tight">GA Web Telemetry</h1>
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block -mt-1">Node SRE Module</span>
               </div>
             </div>

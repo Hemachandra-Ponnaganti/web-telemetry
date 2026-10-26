@@ -59,10 +59,19 @@ export default function SiteAnalysisDashboard({ pageAnalysisData, seoData, activ
   }
 
   // ── Data extraction ──────────────────────────────────────────────────────
+  // Guard: Ensure crawlData actually belongs to the current target domain (prevents cross-site state leaks)
+  const currentHostname = (() => {
+    try { return new URL(seoData?.url || pageAnalysisData?.url || '').hostname; } catch (e) { return ''; }
+  })();
+  const crawlHostname = (() => {
+    try { return new URL(crawlData?.url || '').hostname; } catch (e) { return ''; }
+  })();
+  const isCrawlValidForSite = !crawlHostname || !currentHostname || crawlHostname === currentHostname;
+
   // crawlData (deep BFS crawl) takes priority over pageAnalysisData (quick homepage scan)
-  const deepCrawl     = crawlData?.siteWideImages || null;
-  const crawlMeta     = crawlData?.crawlMeta || null;
-  const deepPageCount = crawlData?.pageCount || null;
+  const deepCrawl     = isCrawlValidForSite ? (crawlData?.siteWideImages || null) : null;
+  const crawlMeta     = isCrawlValidForSite ? (crawlData?.crawlMeta || null) : null;
+  const deepPageCount = isCrawlValidForSite ? (crawlData?.pageCount || null) : null;
 
   const {
     pageCount: quickPageCount = { estimatedPages: 0, sitemapCount: 0, internalLinkCount: 0, source: 'unknown', confidence: 'low' },

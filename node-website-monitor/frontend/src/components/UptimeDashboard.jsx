@@ -176,7 +176,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `monitorpro_node_history_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `ga_web_telemetry_node_history_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -207,7 +207,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
     const html = `
       <html>
       <head>
-          <title>MonitorPro SRE Diagnostic Report - ${h.url}</title>
+          <title>GA Web Telemetry SRE Diagnostic Report - ${h.url}</title>
           <style>
               body {
                   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -333,7 +333,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
       <body>
           <div class="header">
               <div class="header-left">
-                  <h1>MonitorPro SRE Diagnostics</h1>
+                  <h1>GA Web Telemetry SRE Diagnostics</h1>
                   <p>Enterprise Site Reliability Audit & Technical SEO Report (Node.js)</p>
               </div>
               <div class="header-right">
@@ -424,7 +424,7 @@ export default function UptimeDashboard({ stats, isSocketConnected, onNavigateTo
           ${alertsHtml || '<div style="color: #6b7280; font-size: 12px; padding: 12px; border: 1px dashed #e5e7eb; border-radius: 8px; text-align: center;">No critical system anomalies detected in this run.</div>'}
  
           <div class="footer">
-              MonitorPro Enterprise SRE Diagnostics Portal • Confirmed By SRE Node Gateway
+              GA Web Telemetry Enterprise SRE Diagnostics Portal • Confirmed By SRE Node Gateway
           </div>
  
           <script>
