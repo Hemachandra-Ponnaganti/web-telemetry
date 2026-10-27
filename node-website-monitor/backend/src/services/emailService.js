@@ -704,7 +704,7 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         }
       }
     };
-    const uptimeGaugeUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(uptimeGaugeConfig))}&w=220&h=180&bkg=ffffff`;
+    const uptimeGaugeUrl = `https://quickchart.io/chart?backgroundColor=white&c=${encodeURIComponent(JSON.stringify(uptimeGaugeConfig))}&w=220&h=180`;
 
     // 2. Bar Chart: Mobile vs Desktop Load Speeds (7-day trend or comparative breakdown)
     const speedChartConfig = {
@@ -755,7 +755,7 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         }
       }
     };
-    const speedChartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(speedChartConfig))}&w=580&h=240&bkg=ffffff`;
+    const speedChartUrl = `https://quickchart.io/chart?v=3&backgroundColor=white&c=${encodeURIComponent(JSON.stringify(speedChartConfig))}&w=580&h=240`;
 
     // 3. Line Chart: SEO Visibility & Traffic Index Trend (7 days)
     const trafficChartConfig = {
@@ -798,7 +798,7 @@ const sendPeriodicReportEmail = async (url, recipientInput, stats, ccInput = '')
         }
       }
     };
-    const trafficChartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(trafficChartConfig))}&w=580&h=220&bkg=ffffff`;
+    const trafficChartUrl = `https://quickchart.io/chart?v=3&backgroundColor=white&c=${encodeURIComponent(JSON.stringify(trafficChartConfig))}&w=580&h=220`;
 
     // ── Generate Modern HTML Email ───────────────────────────────────────────
     const html = `<!DOCTYPE html>
