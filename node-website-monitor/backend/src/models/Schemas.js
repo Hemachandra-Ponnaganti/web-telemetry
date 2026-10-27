@@ -643,6 +643,7 @@ const EmailAlertHistory = {
     const filterData = () => {
       let res = inMemoryEmailHistory;
       if (query.url) res = res.filter(e => e.url === query.url);
+      if (query.status) res = res.filter(e => e.status === query.status);
       return res;
     };
     return {
@@ -689,7 +690,23 @@ const EmailAlertHistory = {
     if (isConnected()) return await RealEmailAlertHistory.countDocuments(query);
     let res = inMemoryEmailHistory;
     if (query.url) res = res.filter(e => e.url === query.url);
+    if (query.status) res = res.filter(e => e.status === query.status);
     return res.length;
+  },
+  updateMany: async (query = {}, updateData = {}) => {
+    if (isConnected()) return await RealEmailAlertHistory.updateMany(query, updateData);
+    let count = 0;
+    inMemoryEmailHistory.forEach(e => {
+      let matches = true;
+      if (query.status && e.status !== query.status) matches = false;
+      if (query.url && e.url !== query.url) matches = false;
+      if (matches) {
+        Object.assign(e, updateData);
+        count++;
+      }
+    });
+    if (count > 0) saveToDisk();
+    return { modifiedCount: count };
   }
 };
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import {
   Globe, AlertTriangle, CheckCircle2, XCircle, Clock,
-  Calendar, RefreshCw, Bell, Shield, TrendingDown, Info, Loader2
+  Calendar, RefreshCw, Bell, Shield, TrendingDown, Info, Loader2, Mail, Check, AlertCircle
 } from 'lucide-react';
 import { API_BASE } from '../apiConfig';
 
@@ -49,6 +49,11 @@ export default function DomainExpiryDashboard({ isDark, url }) {
   const [domains, setDomains] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [emailConfig, setEmailConfig] = useState(null);
+  const [realAlertHistory, setRealAlertHistory] = useState([]);
+  const [mailRecords, setMailRecords] = useState(null);
+  const [mailLoading, setMailLoading] = useState(false);
+
   useEffect(() => {
     if (!url) return;
     let isMounted = true;
@@ -56,6 +61,7 @@ export default function DomainExpiryDashboard({ isDark, url }) {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setMailLoading(true);
         let baseDomain = '';
         try {
           const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
@@ -67,26 +73,48 @@ export default function DomainExpiryDashboard({ isDark, url }) {
           }
         } catch(e) { baseDomain = url; }
         
-        const wRes = await axios.get(`${API_BASE}/whois?domain=${baseDomain}`);
-        const data = wRes.data;
-        
+        const [wRes, confRes, histRes, mailRes] = await Promise.allSettled([
+          axios.get(`${API_BASE}/whois?domain=${baseDomain}`),
+          axios.get(`${API_BASE}/email-config?url=${encodeURIComponent(url)}`),
+          axios.get(`${API_BASE}/email-history?url=${encodeURIComponent(url)}`),
+          axios.get(`${API_BASE}/mail-records?domain=${baseDomain}`)
+        ]);
+
         if (isMounted) {
-          setDomains([{
-            id: 1,
-            domain: baseDomain,
-            registrar: data.registrar || 'Unknown',
-            registrationDate: data.createdDate || new Date().toISOString(),
-            expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
-            nameservers: data.nameservers || [],
-            autoRenew: false,
-            raw: data.raw || null
-          }]);
+          if (wRes.status === 'fulfilled' && wRes.value?.data) {
+            const data = wRes.value.data;
+            setDomains([{
+              id: 1,
+              domain: baseDomain,
+              registrar: data.registrar || 'Unknown',
+              registrationDate: data.createdDate || new Date().toISOString(),
+              expiryDate: data.expiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString(),
+              nameservers: data.nameservers || [],
+              autoRenew: false,
+              raw: data.raw || null
+            }]);
+          }
+
+          if (confRes.status === 'fulfilled' && confRes.value?.data) {
+            setEmailConfig(confRes.value.data);
+          }
+
+          if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.data)) {
+            setRealAlertHistory(histRes.value.data);
+          }
+
+          if (mailRes.status === 'fulfilled' && mailRes.value?.data?.success) {
+            setMailRecords(mailRes.value.data.data);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch domain data", err);
         if (isMounted) setDomains([]);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setMailLoading(false);
+        }
       }
     };
     fetchData();
@@ -202,8 +230,8 @@ export default function DomainExpiryDashboard({ isDark, url }) {
             onClick={() => setShowAlertHistory(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-500/20 transition-all cursor-pointer"
           >
-            <Bell className="h-3 w-3" />
-            {showAlertHistory ? 'Hide Alerts' : 'Alert History'}
+            <Mail className="h-3 w-3" />
+            {showAlertHistory ? 'Hide Mail Records' : 'Mail Records & Alerts'}
           </button>
         </div>
 
@@ -315,38 +343,365 @@ export default function DomainExpiryDashboard({ isDark, url }) {
         )}
       </div>
 
-      {/* ── ALERT HISTORY ─────────────────────────────────────────────── */}
-      {showAlertHistory && (
-        <div className="glass-card rounded-2xl overflow-hidden animate-fade-in-up">
-          <div className="px-6 py-4 border-b border-slate-800/60">
-            <h3 className="text-slate-200 font-bold text-sm flex items-center gap-2">
-              <Bell className="h-4 w-4 text-amber-400" />
-              Email Alert History
-            </h3>
-            <p className="text-[10px] text-slate-500 mt-0.5">Alerts sent at 90, 60, 30, 15 and 7 days before expiry, plus on expiry.</p>
-          </div>
-          <div className="divide-y divide-slate-800/40">
-            {ALERT_HISTORY.map(alert => (
-              <div key={alert.id} className="flex items-center gap-4 px-6 py-3.5">
-                <div className="h-7 w-7 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
-                  <Bell className="h-3.5 w-3.5 text-amber-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-200">
-                    {alert.threshold === 0
-                      ? <><span className="text-rose-400">{alert.domain}</span> — Expiry alert (domain expired)</>
-                      : <><span className="text-amber-400">{alert.domain}</span> — {alert.threshold}-day expiry warning</>
-                    }
-                  </p>
-                  <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                    Sent: {new Date(alert.sentAt).toLocaleString()}
-                  </p>
-                </div>
-                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                  {alert.status}
+      {/* ── DNS MAIL VALIDATION RECORDS AUDIT (MX, SPF, DKIM, DMARC) ────────── */}
+      <div className="glass-card rounded-2xl overflow-hidden border border-slate-800/80">
+        <div className="px-6 py-4 border-b border-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-indigo-400" />
+              <h3 className="text-slate-200 font-bold text-sm">
+                DNS Mail Validation Records
+              </h3>
+              {mailRecords && (
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                  mailRecords.healthScore >= 80 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : mailRecords.healthScore >= 50 
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`}>
+                  Health: {mailRecords.healthScore}/100
                 </span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Email deliverability & anti-spoofing security audit (MX, SPF, DKIM & DMARC authentication).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAlertHistory(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-500/20 transition-all cursor-pointer"
+            >
+              <Bell className="h-3 w-3" />
+              {showAlertHistory ? 'Hide Notification Logs' : 'Notification Endpoints & Logs'}
+            </button>
+          </div>
+        </div>
+
+        {mailLoading ? (
+          <div className="p-8 text-center flex flex-col items-center justify-center">
+            <Loader2 className="h-6 w-6 text-indigo-400 animate-spin mb-2" />
+            <p className="text-xs text-slate-400 font-bold">Auditing DNS Mail Authentication Records...</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Querying MX, SPF, DKIM selectors and DMARC policies.</p>
+          </div>
+        ) : mailRecords ? (
+          <div className="p-6 space-y-6">
+            {/* Quick Status Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* MX Record */}
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                mailRecords.mx.status === 'valid'
+                  ? 'bg-slate-900/60 border-emerald-500/20'
+                  : 'bg-rose-950/20 border-rose-500/30'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">MX (Mail Exchange)</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      mailRecords.mx.status === 'valid'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {mailRecords.mx.status === 'valid' ? <Check className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                      {mailRecords.mx.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-200">
+                    {mailRecords.mx.count > 0 ? `${mailRecords.mx.count} Server${mailRecords.mx.count > 1 ? 's' : ''}` : 'No MX Records'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                    {mailRecords.mx.details}
+                  </p>
+                </div>
               </div>
-            ))}
+
+              {/* SPF Record */}
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                mailRecords.spf.status === 'valid'
+                  ? 'bg-slate-900/60 border-emerald-500/20'
+                  : mailRecords.spf.status === 'warning'
+                  ? 'bg-amber-950/20 border-amber-500/30'
+                  : 'bg-rose-950/20 border-rose-500/30'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">SPF (Sender Policy)</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      mailRecords.spf.status === 'valid'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : mailRecords.spf.status === 'warning'
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {mailRecords.spf.status === 'valid' ? <Check className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                      {mailRecords.spf.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-200">
+                    {mailRecords.spf.status === 'valid' ? 'SPF Configured' : 'Missing SPF'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                    {mailRecords.spf.details}
+                  </p>
+                </div>
+              </div>
+
+              {/* DKIM Record */}
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                mailRecords.dkim.status === 'valid'
+                  ? 'bg-slate-900/60 border-emerald-500/20'
+                  : 'bg-rose-950/20 border-rose-500/30'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">DKIM (DomainKeys)</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      mailRecords.dkim.status === 'valid'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {mailRecords.dkim.status === 'valid' ? <Check className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                      {mailRecords.dkim.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-200">
+                    {mailRecords.dkim.status === 'valid' ? `Selector: ${mailRecords.dkim.selector}` : 'Missing DKIM'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                    {mailRecords.dkim.details}
+                  </p>
+                </div>
+              </div>
+
+              {/* DMARC Record */}
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                mailRecords.dmarc.status === 'valid'
+                  ? 'bg-slate-900/60 border-emerald-500/20'
+                  : 'bg-rose-950/20 border-rose-500/30'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">DMARC (Policy)</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      mailRecords.dmarc.status === 'valid'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {mailRecords.dmarc.status === 'valid' ? <Check className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                      {mailRecords.dmarc.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-200">
+                    {mailRecords.dmarc.status === 'valid' ? 'DMARC Active' : 'Missing DMARC'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                    {mailRecords.dmarc.details}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Warning Banner if any mail records are missing */}
+            {mailRecords.issues && mailRecords.issues.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-1.5">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Mail Record Issues Detected ({mailRecords.issues.length})</span>
+                </div>
+                <ul className="list-disc list-inside text-xs text-amber-200/90 space-y-1 pl-1">
+                  {mailRecords.issues.map((issue, idx) => (
+                    <li key={idx}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Raw DNS Mail Records Detail view */}
+            <div className="space-y-3 pt-2">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Discovered DNS Authentication Records</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {/* SPF Details */}
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
+                  <span className="text-[10px] text-slate-500 font-mono font-bold block mb-1">TXT Record (SPF)</span>
+                  {mailRecords.spf.record ? (
+                    <code className="text-[11px] font-mono text-emerald-300 break-all bg-emerald-950/30 p-2 rounded block border border-emerald-900/40">
+                      {mailRecords.spf.record}
+                    </code>
+                  ) : (
+                    <span className="text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> No SPF TXT record published
+                    </span>
+                  )}
+                </div>
+
+                {/* DMARC Details */}
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
+                  <span className="text-[10px] text-slate-500 font-mono font-bold block mb-1">TXT Record (_dmarc.{mailRecords.domain})</span>
+                  {mailRecords.dmarc.record ? (
+                    <code className="text-[11px] font-mono text-emerald-300 break-all bg-emerald-950/30 p-2 rounded block border border-emerald-900/40">
+                      {mailRecords.dmarc.record}
+                    </code>
+                  ) : (
+                    <span className="text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> No DMARC TXT record published
+                    </span>
+                  )}
+                </div>
+
+                {/* MX Details */}
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
+                  <span className="text-[10px] text-slate-500 font-mono font-bold block mb-1">MX Records ({mailRecords.domain})</span>
+                  {mailRecords.mx.records && mailRecords.mx.records.length > 0 ? (
+                    <div className="space-y-1">
+                      {mailRecords.mx.records.map((mx, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px] font-mono text-slate-200 bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
+                          <span>{mx.host}</span>
+                          <span className="text-[10px] text-indigo-400 font-bold">Pri: {mx.priority}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> No MX records published
+                    </span>
+                  )}
+                </div>
+
+                {/* DKIM Details */}
+                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5">
+                  <span className="text-[10px] text-slate-500 font-mono font-bold block mb-1">DKIM Key ({mailRecords.dkim.selector ? `${mailRecords.dkim.selector}._domainkey.${mailRecords.domain}` : 'DomainKey'})</span>
+                  {mailRecords.dkim.record ? (
+                    <code className="text-[10px] font-mono text-emerald-300 break-all bg-emerald-950/30 p-2 rounded block border border-emerald-900/40 max-h-24 overflow-y-auto custom-scrollbar">
+                      {mailRecords.dkim.record}
+                    </code>
+                  ) : (
+                    <span className="text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> No DKIM signature key found on standard selectors
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* ── NOTIFICATION LOGS & RECIPIENTS DRAWER ──────────────────────────────── */}
+      {showAlertHistory && (
+        <div className="glass-card rounded-2xl overflow-hidden animate-fade-in-up border border-indigo-500/20">
+          <div className="px-6 py-4 border-b border-slate-800/60 flex items-center justify-between">
+            <div>
+              <h3 className="text-slate-200 font-bold text-sm flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-400" />
+                Notification Endpoints & Incident Log Records
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Configured email recipients and automated dispatch log.</p>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {realAlertHistory.length} Record{realAlertHistory.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Mail Recipient Validation Status Card */}
+          <div className="p-6 border-b border-slate-800/60 bg-slate-900/30">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-3">Configured Mail Recipients & Validation</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-950/60 border border-slate-800/70 rounded-xl p-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Mail className="h-3 w-3 text-indigo-400" /> Incident Alert Email
+                  </span>
+                  {emailConfig?.alertEmail ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <Check className="h-2.5 w-2.5" /> Valid Format
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-mono text-slate-200 truncate">
+                  {emailConfig?.alertEmail || 'No recipient configured'}
+                </p>
+                {emailConfig?.alertCc && (
+                  <p className="text-[10px] font-mono text-slate-500 mt-1 truncate">
+                    CC: {emailConfig.alertCc}
+                  </p>
+                )}
+                <div className="mt-2.5 pt-2 border-t border-slate-800/50 flex items-center justify-between text-[10px]">
+                  <span className="text-slate-500">Alerts Mode:</span>
+                  <span className={`font-bold ${emailConfig?.alertsEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    {emailConfig?.alertsEnabled ? 'Active (Enabled)' : 'Muted (Disabled)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/60 border border-slate-800/70 rounded-xl p-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="h-3 w-3 text-emerald-400" /> Scheduled Report Recipient
+                  </span>
+                  {emailConfig?.reportEmail ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <Check className="h-2.5 w-2.5" /> Valid Format
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-mono text-slate-200 truncate">
+                  {emailConfig?.reportEmail || 'No recipient configured'}
+                </p>
+                {emailConfig?.reportCc && (
+                  <p className="text-[10px] font-mono text-slate-500 mt-1 truncate">
+                    CC: {emailConfig.reportCc}
+                  </p>
+                )}
+                <div className="mt-2.5 pt-2 border-t border-slate-800/50 flex items-center justify-between text-[10px]">
+                  <span className="text-slate-500">Cadence:</span>
+                  <span className="font-bold text-slate-300">
+                    {emailConfig?.reportsEnabled ? `Every ${emailConfig.reportFrequency || '48h'}` : 'Disabled'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Email Delivery / Alert History Feed */}
+          <div className="divide-y divide-slate-800/40 max-h-72 overflow-y-auto custom-scrollbar">
+            {realAlertHistory.length > 0 ? (
+              realAlertHistory.map(alert => (
+                <div key={alert._id || alert.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-800/20 transition-colors">
+                  <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border ${alert.status === 'delivered' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' : alert.status === 'failed' ? 'bg-rose-500/10 border-rose-500/25 text-rose-400' : 'bg-amber-500/10 border-amber-500/25 text-amber-400'}`}>
+                    <Mail className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-200 truncate">
+                      {alert.subject}
+                    </p>
+                    <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono mt-0.5">
+                      <span>To: <strong className="text-slate-400">{alert.alertEmail || alert.recipient}</strong></span>
+                      <span>•</span>
+                      <span>{new Date(alert.sentAt || alert.deliveredAt).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 border ${alert.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : alert.status === 'failed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                    {alert.status || 'delivered'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center">
+                <Mail className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-300">No email delivery history for this domain yet.</p>
+                <p className="text-[10px] text-slate-500 mt-1">Alerts will log here once dispatched to verified recipients.</p>
+              </div>
+            )}
           </div>
 
           {/* Alert schedule info */}

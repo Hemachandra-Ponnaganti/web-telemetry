@@ -177,12 +177,15 @@ export default function App() {
   }, []);
 
   const [targetsLoading, setTargetsLoading] = useState(true);
+  const targetsRef = useRef([]);
+  useEffect(() => {
+    targetsRef.current = targets;
+  }, [targets]);
 
   // Fetch unique audited SRE target list
   const fetchTargets = async (isSilent = false) => {
-    // Only show full skeleton loader if this is the initial load or explicit manual user action,
-    // NOT on background websocket syncs when targets are already loaded on screen
-    if (!isSilent || targets.length === 0) {
+    // Only show full skeleton loader if this is the initial load with no targets in memory
+    if (!isSilent && targetsRef.current.length === 0) {
       setTargetsLoading(true);
     }
     try {
@@ -194,7 +197,9 @@ export default function App() {
       }
     } catch (err) {
       console.error("Failed to fetch SRE audited targets:", err);
-      setTargets([]);
+      if (targetsRef.current.length === 0) {
+        setTargets([]);
+      }
     } finally {
       setTargetsLoading(false);
     }

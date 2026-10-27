@@ -333,27 +333,22 @@ const enqueueEmailAlert = async ({ url, recipient, cc, category, level, subject,
 const initializeEmailQueue = async () => {
   try {
     const { EmailAlertHistory } = require('../models/Schemas');
+    // Clear and mark any stale 'sending' alerts from prior crashes/runs to prevent flooding recipients on server reboot
     const pending = await EmailAlertHistory.find({ status: 'sending' });
-    console.log(`🔌 Startup recovery: found ${pending.length} pending alert records.`);
-    
-    for (const doc of pending) {
-      const html = rebuildHtmlForPending(doc);
-      emailQueue.push({
-        dbId: doc._id.toString(),
-        url: doc.url,
-        recipient: doc.alertEmail,
-        subject: doc.subject,
-        message: doc.message,
-        category: doc.alertType,
-        level: doc.level,
-        html,
-        cc: undefined,
-        attempts: 0
-      });
+    if (pending && pending.length > 0) {
+      console.log(`🧹 Clearing ${pending.length} pending/stale email records from previous session to prevent email flood...`);
+      await EmailAlertHistory.updateMany(
+        { status: 'sending' },
+        { status: 'failed', errorReason: 'Dismissed during server startup to prevent email flood' }
+      );
+    } else {
+      console.log(`🔌 Startup check: 0 pending emails found in queue.`);
     }
-    processQueue();
+    // Reset active memory queue
+    emailQueue = [];
+    activeWorkers = 0;
   } catch (err) {
-    console.error('⚠️ Failed to initialize email queue recovery:', err.message);
+    console.error('⚠️ Failed during startup email queue maintenance:', err.message);
   }
 };
 

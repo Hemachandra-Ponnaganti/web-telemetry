@@ -875,4 +875,145 @@ router.get('/whois', async (req, res) => {
   }
 });
 
+// ── Mail Validation Records Audit (MX, SPF, DKIM, DMARC) ────────────────────
+router.get('/mail-records', async (req, res) => {
+  const { domain } = req.query;
+  if (!domain) return res.status(400).json({ error: 'Domain is required.' });
+
+  const cleanDomain = domain.replace(/^https?:\/\//i, '').split('/')[0].trim().toLowerCase();
+  
+  try {
+    const axios = require('axios');
+    const queryDoH = async (name, type) => {
+      try {
+        const resp = await axios.get(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`, { timeout: 7000 });
+        return resp.data?.Answer || [];
+      } catch (err) {
+        return [];
+      }
+    };
+
+    // 1. Query MX records
+    const mxAnswers = await queryDoH(cleanDomain, 'MX');
+    const mxRecords = mxAnswers.map(a => {
+      const parts = (a.data || '').trim().split(/\s+/);
+      const priority = parts.length > 1 ? parseInt(parts[0], 10) : 0;
+      const host = parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
+      return { priority, host: host?.replace(/\.$/, '') };
+    });
+    const hasMx = mxRecords.length > 0;
+
+    // 2. Query TXT records on apex for SPF
+    const txtAnswers = await queryDoH(cleanDomain, 'TXT');
+    const spfRecordObj = txtAnswers.find(a => (a.data || '').includes('v=spf1'));
+    const spfRaw = spfRecordObj ? (spfRecordObj.data || '').replace(/^"|"$/g, '').trim() : null;
+    const hasSpf = !!spfRaw;
+
+    let spfStatus = 'missing';
+    let spfDetails = 'No SPF record found. Email delivery may be marked as spam or spoofed.';
+    if (hasSpf) {
+      if (spfRaw.includes('-all')) {
+        spfStatus = 'valid';
+        spfDetails = 'Strict SPF policy (-all) properly configured.';
+      } else if (spfRaw.includes('~all')) {
+        spfStatus = 'valid';
+        spfDetails = 'SoftFail SPF policy (~all) configured.';
+      } else if (spfRaw.includes('?all') || spfRaw.includes('+all')) {
+        spfStatus = 'warning';
+        spfDetails = 'Permissive SPF policy detected (+all/?all). Consider using ~all or -all.';
+      } else {
+        spfStatus = 'valid';
+        spfDetails = 'SPF record found.';
+      }
+    }
+
+    // 3. Query DMARC record on _dmarc.<domain>
+    const dmarcAnswers = await queryDoH(`_dmarc.${cleanDomain}`, 'TXT');
+    const dmarcRecordObj = dmarcAnswers.find(a => (a.data || '').includes('v=DMARC1'));
+    const dmarcRaw = dmarcRecordObj ? (dmarcRecordObj.data || '').replace(/^"|"$/g, '').trim() : null;
+    const hasDmarc = !!dmarcRaw;
+
+    let dmarcStatus = 'missing';
+    let dmarcDetails = 'No DMARC record found at _dmarc.' + cleanDomain + '. Missing email authentication and spoof protection.';
+    if (hasDmarc) {
+      const policyMatch = dmarcRaw.match(/p=([a-zA-Z]+)/);
+      const policy = policyMatch ? policyMatch[1].toLowerCase() : 'none';
+      if (policy === 'reject') {
+        dmarcStatus = 'valid';
+        dmarcDetails = 'Strict reject policy (p=reject) enforcing authentication.';
+      } else if (policy === 'quarantine') {
+        dmarcStatus = 'valid';
+        dmarcDetails = 'Quarantine policy (p=quarantine) protecting domain.';
+      } else {
+        dmarcStatus = 'valid';
+        dmarcDetails = 'Monitoring policy (p=none) active.';
+      }
+    }
+
+    // 4. Query common DKIM selectors
+    const selectors = ['default', 'google', 'k1', 's1', 's2017', 'mail', 'smtp', 'mandrill'];
+    let dkimFound = null;
+    let foundSelector = null;
+
+    for (const sel of selectors) {
+      const dkimAnswers = await queryDoH(`${sel}._domainkey.${cleanDomain}`, 'TXT');
+      const dkimMatch = dkimAnswers.find(a => (a.data || '').includes('v=DKIM1') || (a.data || '').includes('k=rsa') || (a.data || '').includes('p='));
+      if (dkimMatch) {
+        dkimFound = (dkimMatch.data || '').replace(/^"|"$/g, '').trim();
+        foundSelector = sel;
+        break;
+      }
+    }
+
+    let dkimStatus = dkimFound ? 'valid' : 'missing';
+    let dkimDetails = dkimFound 
+      ? `DKIM public key signature verified on selector '${foundSelector}._domainkey.${cleanDomain}'.`
+      : `No standard DKIM key discovered (probed: ${selectors.join(', ')}). Ensure selector key is published.`;
+
+    // Calculate overall mail health score (0 to 100)
+    let score = 0;
+    if (hasMx) score += 30;
+    if (hasSpf) score += 25;
+    if (hasDmarc) score += 25;
+    if (dkimFound) score += 20;
+
+    const summary = {
+      domain: cleanDomain,
+      healthScore: score,
+      mx: {
+        status: hasMx ? 'valid' : 'missing',
+        records: mxRecords,
+        count: mxRecords.length,
+        details: hasMx ? `${mxRecords.length} mail exchange server(s) configured.` : 'No MX records found. Domain cannot receive incoming email.'
+      },
+      spf: {
+        status: spfStatus,
+        record: spfRaw,
+        details: spfDetails
+      },
+      dkim: {
+        status: dkimStatus,
+        selector: foundSelector,
+        record: dkimFound,
+        details: dkimDetails
+      },
+      dmarc: {
+        status: dmarcStatus,
+        record: dmarcRaw,
+        details: dmarcDetails
+      },
+      issues: [
+        ...(!hasMx ? ['Missing MX Records: Cannot receive mail'] : []),
+        ...(!hasSpf ? ['Missing SPF Record: At risk of spoofing and spam classification'] : []),
+        ...(!hasDmarc ? ['Missing DMARC Record: Domain lack anti-phishing enforcement policy'] : []),
+        ...(!dkimFound ? ['Missing/Unverified DKIM: Domain keys not found on standard selectors'] : [])
+      ]
+    };
+
+    res.status(200).json({ success: true, data: summary });
+  } catch (err) {
+    res.status(500).json({ error: `Mail validation failed: ${err.message}` });
+  }
+});
+
 module.exports = router;
