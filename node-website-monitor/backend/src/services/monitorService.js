@@ -1212,12 +1212,47 @@ const startUptimeScheduler = (io) => {
           else if (config.reportFrequency === '7d') frequencyHours = 168;
 
           const now = Date.now();
-          const currentDate = new Date(now);
-          const currentHour = currentDate.getHours();
-          const currentDay = currentDate.getDay(); // 0 is Sunday
+          const targetTz = config.reportTimezone || 'UTC';
+          
+          // Get current time according to configured timezone (or default local/UTC)
+          let currentDay, currentHour;
+          try {
+            const dateInTz = new Intl.DateTimeFormat('en-US', {
+              timeZone: targetTz,
+              hour12: false,
+              weekday: 'short',
+              hour: 'numeric'
+            }).formatToParts(new Date(now));
+            
+            const weekdayPart = dateInTz.find(p => p.type === 'weekday')?.value;
+            const hourPart = parseInt(dateInTz.find(p => p.type === 'hour')?.value, 10);
+            
+            const weekdayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+            currentDay = weekdayPart ? weekdayMap[weekdayPart] : new Date(now).getDay();
+            currentHour = !isNaN(hourPart) ? hourPart : new Date(now).getHours();
+          } catch (e) {
+            const currentDate = new Date(now);
+            currentHour = currentDate.getHours();
+            currentDay = currentDate.getDay();
+          }
+
           let shouldSend = false;
 
-          if (!config.lastReportSent) {
+          // Check for custom day/time schedule
+          if (config.reportFrequency === 'custom') {
+            const targetDay = config.reportDay !== undefined ? Number(config.reportDay) : 1; // default Monday
+            const targetHour = config.reportHour !== undefined ? Number(config.reportHour) : 9; // default 9 AM
+            
+            if (currentDay === targetDay && currentHour === targetHour) {
+              if (!config.lastReportSent) {
+                shouldSend = true;
+              } else {
+                // Ensure at least 20 hours have passed since the last report to prevent double-firing in the same hour window
+                const hoursSinceLastSent = (now - new Date(config.lastReportSent).getTime()) / (1000 * 60 * 60);
+                shouldSend = hoursSinceLastSent >= 20;
+              }
+            }
+          } else if (!config.lastReportSent) {
             // If never sent before, align to the first available slot
             if (frequencyHours === 12) {
               shouldSend = (currentHour === 0 || currentHour === 12);
@@ -1249,7 +1284,10 @@ const startUptimeScheduler = (io) => {
           }
 
           if (shouldSend) {
-            console.log(`📊 Generating ${config.reportFrequency} periodic report for ${site.url} to ${config.reportEmail}${config.reportCc ? ` (CC: ${config.reportCc})` : ''}...`);
+            const freqDescription = config.reportFrequency === 'custom' 
+              ? `Custom weekly (Day ${config.reportDay} at ${config.reportHour}:00 ${config.reportTimezone || 'UTC'})` 
+              : config.reportFrequency;
+            console.log(`📊 Generating ${freqDescription} periodic report for ${site.url} to ${config.reportEmail}${config.reportCc ? ` (CC: ${config.reportCc})` : ''}...`);
             const stats = await compileStats(site.url);
             await sendPeriodicReportEmail(site.url, config.reportEmail, stats, config.reportCc);
             

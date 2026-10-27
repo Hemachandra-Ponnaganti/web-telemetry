@@ -46,6 +46,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
     reportCc:       '',
     reportsEnabled: false,
     reportFrequency:'48h',
+    reportDay:       1,
+    reportHour:      9,
+    reportTimezone:  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     totalEmailsSent: 0,
     lastEmailSent:   null,
     lastAlertType:   '',
@@ -172,6 +175,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         reportCc:       reportCcInput,
         reportsEnabled: config.reportsEnabled,
         reportFrequency:config.reportFrequency,
+        reportDay:      config.reportDay,
+        reportHour:     config.reportHour,
+        reportTimezone: config.reportTimezone,
       });
       if (resp.data.success) {
         setConfig(prev => ({
@@ -213,6 +219,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         reportCc:       reportCcInput !== undefined ? reportCcInput : config.reportCc,
         reportsEnabled: config.reportsEnabled,
         reportFrequency:config.reportFrequency,
+        reportDay:      config.reportDay,
+        reportHour:     config.reportHour,
+        reportTimezone: config.reportTimezone,
       });
       showToast(newEnabled ? 'Email alerts enabled for this website.' : 'Email alerts disabled.', newEnabled ? 'success' : 'info');
     } catch (err) {
@@ -239,6 +248,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         reportCc:       reportCcInput !== undefined ? reportCcInput : config.reportCc,
         reportsEnabled: newEnabled,
         reportFrequency:config.reportFrequency,
+        reportDay:      config.reportDay,
+        reportHour:     config.reportHour,
+        reportTimezone: config.reportTimezone,
       });
       showToast(newEnabled ? 'Periodic reports enabled.' : 'Periodic reports disabled.', newEnabled ? 'success' : 'info');
     } catch (err) {
@@ -500,31 +512,122 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
           </div>
 
           {/* Report frequency */}
-          <div className="space-y-2">
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-              Report Frequency
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Report Frequency & Schedule
+              </label>
+              {config.reportFrequency === 'custom' && (
+                <span className="text-[10px] text-emerald-400 font-medium">
+                  Runs every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][config.reportDay ?? 1]} at {((config.reportHour ?? 9) % 12 || 12)}:00 {(config.reportHour ?? 9) >= 12 ? 'PM' : 'AM'}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
               {[
-                { value: '12h', label: '12h', desc: 'Twice daily' },
-                { value: '24h', label: '24h', desc: 'Daily' },
-                { value: '48h', label: '48h', desc: 'Every 2 days' },
-                { value: '72h', label: '72h', desc: 'Every 3 days' },
-                { value: '7d',  label: '7d',  desc: 'Weekly' },
+                { value: '12h',    label: '12h',    desc: 'Twice daily' },
+                { value: '24h',    label: '24h',    desc: 'Daily' },
+                { value: '48h',    label: '48h',    desc: 'Every 2 days' },
+                { value: '72h',    label: '72h',    desc: 'Every 3 days' },
+                { value: '7d',     label: '7d',     desc: 'Weekly (Sun)' },
+                { value: 'custom', label: 'Custom', desc: 'Custom Day & Time' },
               ].map(opt => (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => setConfig(prev => ({ ...prev, reportFrequency: opt.value }))}
                   className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                     config.reportFrequency === opt.value
-                      ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300'
+                      ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/10'
                       : 'bg-slate-800/30 border-slate-700/50 text-slate-400 hover:border-slate-600'
                   }`}
                 >
                   <p className="text-[10px] font-black uppercase tracking-wider">{opt.label}</p>
+                  <p className="text-[8px] text-slate-500 mt-0.5 truncate">{opt.desc}</p>
                 </button>
               ))}
             </div>
+
+            {/* Custom Day and Hour picker */}
+            {(config.reportFrequency === 'custom' || config.reportFrequency === '7d') && (
+              <div className="p-3.5 bg-slate-900/60 border border-emerald-500/30 rounded-xl space-y-3 mt-2 animate-fadeIn">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-bold">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  Custom Weekly Send Time
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Day of Week */}
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Day of the Week
+                    </label>
+                    <select
+                      value={config.reportDay ?? 1}
+                      onChange={e => setConfig(prev => ({ ...prev, reportDay: parseInt(e.target.value, 10), reportFrequency: 'custom' }))}
+                      className="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value={1}>Monday (Morning / Custom)</option>
+                      <option value={2}>Tuesday</option>
+                      <option value={3}>Wednesday</option>
+                      <option value={4}>Thursday</option>
+                      <option value={5}>Friday</option>
+                      <option value={6}>Saturday</option>
+                      <option value={0}>Sunday</option>
+                    </select>
+                  </div>
+
+                  {/* Time of Day */}
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Send Hour
+                    </label>
+                    <select
+                      value={config.reportHour ?? 9}
+                      onChange={e => setConfig(prev => ({ ...prev, reportHour: parseInt(e.target.value, 10), reportFrequency: 'custom' }))}
+                      className="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value={6}>6:00 AM (Early Morning)</option>
+                      <option value={8}>8:00 AM</option>
+                      <option value={9}>9:00 AM (Morning)</option>
+                      <option value={10}>10:00 AM</option>
+                      <option value={12}>12:00 PM (Noon)</option>
+                      <option value={14}>2:00 PM</option>
+                      <option value={16}>4:00 PM (Afternoon)</option>
+                      <option value={18}>6:00 PM (Evening)</option>
+                      <option value={20}>8:00 PM (Night)</option>
+                      <option value={0}>12:00 AM (Midnight)</option>
+                    </select>
+                  </div>
+
+                  {/* Timezone */}
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Timezone
+                    </label>
+                    <select
+                      value={config.reportTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}
+                      onChange={e => setConfig(prev => ({ ...prev, reportTimezone: e.target.value, reportFrequency: 'custom' }))}
+                      className="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="Asia/Kolkata">IST (India - Asia/Kolkata)</option>
+                      <option value="Australia/Sydney">AEST (Sydney / Melbourne)</option>
+                      <option value="Australia/Perth">AWST (Perth)</option>
+                      <option value="America/New_York">EST (New York / US Eastern)</option>
+                      <option value="America/Chicago">CST (Chicago / US Central)</option>
+                      <option value="America/Los_Angeles">PST (Los Angeles / US Pacific)</option>
+                      <option value="Europe/London">GMT / BST (London)</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400">
+                  💡 This website's health report will be automatically compiled and dispatched every <span className="text-emerald-300 font-semibold">{['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][config.reportDay ?? 1]}</span> at <span className="text-emerald-300 font-semibold">{((config.reportHour ?? 9) % 12 || 12)}:00 {(config.reportHour ?? 9) >= 12 ? 'PM' : 'AM'}</span> ({config.reportTimezone || 'your local timezone'}).
+                </p>
+              </div>
+            )}
           </div>
           
           {config.lastReportSent && (

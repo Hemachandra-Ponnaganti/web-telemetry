@@ -665,7 +665,11 @@ export default function DomainExpiryDashboard({ isDark, url }) {
                 <div className="mt-2.5 pt-2 border-t border-slate-800/50 flex items-center justify-between text-[10px]">
                   <span className="text-slate-500">Cadence:</span>
                   <span className="font-bold text-slate-300">
-                    {emailConfig?.reportsEnabled ? `Every ${emailConfig.reportFrequency || '48h'}` : 'Disabled'}
+                    {emailConfig?.reportsEnabled 
+                      ? (emailConfig.reportFrequency === 'custom'
+                          ? `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][emailConfig.reportDay ?? 1]} at ${((emailConfig.reportHour ?? 9) % 12 || 12)} ${ (emailConfig.reportHour ?? 9) >= 12 ? 'PM' : 'AM'}`
+                          : `Every ${emailConfig.reportFrequency || '48h'}`)
+                      : 'Disabled'}
                   </span>
                 </div>
               </div>

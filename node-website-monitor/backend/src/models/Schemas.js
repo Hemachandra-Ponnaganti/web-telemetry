@@ -529,7 +529,10 @@ const websiteEmailConfigSchema = new mongoose.Schema({
   reportEmail:          { type: String, default: '' },
   reportCc:             { type: String, default: '' },
   reportsEnabled:       { type: Boolean, default: false },
-  reportFrequency:      { type: String, enum: ['12h', '24h', '48h', '72h', '7d'], default: '48h' },
+  reportFrequency:      { type: String, enum: ['12h', '24h', '48h', '72h', '7d', 'custom'], default: '48h' },
+  reportDay:            { type: Number, default: 1 }, // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+  reportHour:           { type: Number, default: 9 }, // 0 to 23 (e.g. 9 = 9 AM, 16 = 4 PM)
+  reportTimezone:       { type: String, default: 'UTC' }, // IANA timezone or offset
   lastReportSent:       { type: Date, default: null },
   updatedAt:            { type: Date, default: Date.now }
 });
@@ -575,7 +578,7 @@ const WebsiteEmailConfig = {
       saveToDisk();
       return inMemoryEmailConfig[index];
     } else if (options.upsert) {
-      const doc = { url: query.url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', lastEmailSent: null, lastWarningEmailSent: null, reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
+      const doc = { url: query.url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', lastEmailSent: null, lastWarningEmailSent: null, reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', reportDay: 1, reportHour: 9, reportTimezone: 'UTC', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
       inMemoryEmailConfig.push(doc);
       saveToDisk();
       return doc;

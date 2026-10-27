@@ -184,7 +184,12 @@ router.get('/email-config', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required.' });
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
-    const config = await WebsiteEmailConfig.findOne({ url }) || { url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastEmailSent: null, lastWarningEmailSent: null, lastAlertType: '', reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', lastReportSent: null };
+    const config = await WebsiteEmailConfig.findOne({ url }) || { 
+      url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', 
+      totalEmailsSent: 0, lastEmailSent: null, lastWarningEmailSent: null, lastAlertType: '', 
+      reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', 
+      reportDay: 1, reportHour: 9, reportTimezone: 'UTC', lastReportSent: null 
+    };
     res.status(200).json(config);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -192,7 +197,11 @@ router.get('/email-config', async (req, res) => {
 });
 
 router.post('/email-config', async (req, res) => {
-  const { url, alertEmail, alertCc, alertsEnabled, alertFrequency, reportEmail, reportCc, reportsEnabled, reportFrequency } = req.body;
+  const { 
+    url, alertEmail, alertCc, alertsEnabled, alertFrequency, 
+    reportEmail, reportCc, reportsEnabled, reportFrequency,
+    reportDay, reportHour, reportTimezone
+  } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required.' });
   
   const validateEmails = (str) => {
@@ -226,6 +235,9 @@ router.post('/email-config', async (req, res) => {
       reportCc: reportCc !== undefined ? reportCc : '',
       reportsEnabled: !!reportsEnabled,
       reportFrequency: reportFrequency || '48h',
+      reportDay: reportDay !== undefined ? Number(reportDay) : 1,
+      reportHour: reportHour !== undefined ? Number(reportHour) : 9,
+      reportTimezone: reportTimezone || 'UTC',
       updatedAt: new Date()
     };
     const config = await WebsiteEmailConfig.findOneAndUpdate(
