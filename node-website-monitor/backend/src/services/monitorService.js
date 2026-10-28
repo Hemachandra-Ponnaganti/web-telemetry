@@ -547,8 +547,9 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
     let puppeteerSuccess = false;
     
     if (puppeteer) {
+      let browser = null;
       try {
-        const browser = await puppeteer.launch({
+        browser = await puppeteer.launch({
           headless: 'new',
           args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
@@ -558,7 +559,7 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
         await page.setViewport({ width: 1366, height: 768 });
         
         ttfbStart = Date.now();
-        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
         
         // Capture TTFB immediately after initial navigation completes, not after scrolling/waiting
         auditReport.ttfbMs = Date.now() - ttfbStart;
@@ -593,12 +594,14 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
         const status = response ? response.status() : 200;
         auditReport.statusCode = status;
         auditReport.isUp = (status === 200 || status === 304 || status === 403 || status === 503);
-        
-        await browser.close();
         puppeteerSuccess = true;
       } catch (err) {
         console.error(`Puppeteer scan failed for ${url}:`, err.message);
         puppeteerSuccess = false;
+      } finally {
+        if (browser) {
+          try { await browser.close(); } catch(e) {}
+        }
       }
     }
 
