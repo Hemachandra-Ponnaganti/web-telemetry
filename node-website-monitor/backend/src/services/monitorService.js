@@ -671,11 +671,16 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
                 const reqId = initRes.data?.request_id;
                 if (!reqId) return eReject(new Error('No request_id from edge probe'));
 
-                await new Promise(r => setTimeout(r, 2500));
-                const resRes = await axios.get(`https://check-host.net/check-result/${reqId}`, {
-                  headers: { 'Accept': 'application/json' },
-                  timeout: 6000
-                });
+                let resRes = null;
+                for (let retry = 0; retry < 3; retry++) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  resRes = await axios.get(`https://check-host.net/check-result/${reqId}`, {
+                    headers: { 'Accept': 'application/json' },
+                    timeout: 6000
+                  });
+                  const anyData = Object.values(resRes.data || {}).some(v => v !== null);
+                  if (anyData) break;
+                }
 
                 const nodes = Object.values(resRes.data || {});
                 let verifiedUp = false;
