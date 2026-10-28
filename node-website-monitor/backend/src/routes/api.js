@@ -18,6 +18,10 @@ const {
 // Immediate Site Audit Trigger
 router.post('/audit', triggerAudit);
 
+router.get('/health-check', (req, res) => {
+  res.json({ status: 'ok', version: '65370b3', timestamp: new Date().toISOString() });
+});
+
 // Full-website deep crawl (page + image discovery across entire site)
 router.post('/crawl', async (req, res) => {
   const { url } = req.body;
