@@ -19,7 +19,66 @@ const {
 router.post('/audit', triggerAudit);
 
 router.get('/health-check', (req, res) => {
-  res.json({ status: 'ok', version: '65370b3', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: 'debug-probe', timestamp: new Date().toISOString() });
+});
+
+router.get('/debug-probe', async (req, res) => {
+  const target = req.query.url || 'https://cpvia.com/';
+  const results = {};
+  const https = require('https');
+  const tls = require('tls');
+  const parsed = new URL(target);
+
+  // 1. DNS test
+  const dns = require('dns').promises;
+  try {
+    results.dns = await dns.resolve4(parsed.hostname);
+  } catch (e) {
+    results.dnsError = e.message;
+  }
+
+  // 2. TLS socket test with 5s timeout
+  try {
+    results.tls = await new Promise((resolve) => {
+      const socket = tls.connect({
+        host: parsed.hostname,
+        port: 443,
+        servername: parsed.hostname,
+        timeout: 5000,
+        rejectUnauthorized: false
+      }, () => {
+        const cert = socket.getPeerCertificate();
+        socket.end();
+        resolve({ connected: true, certValidTo: cert.valid_to, issuer: cert.issuer?.O });
+      });
+      socket.on('error', (e) => resolve({ connected: false, error: e.message }));
+      socket.on('timeout', () => { socket.destroy(); resolve({ connected: false, error: 'TLS timeout (5s)' }); });
+    });
+  } catch (e) {
+    results.tlsError = e.message;
+  }
+
+  // 3. HTTP GET test with 6s timeout
+  try {
+    results.http = await new Promise((resolve) => {
+      const r = https.get(target, {
+        timeout: 6000,
+        rejectUnauthorized: false,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': '*/*'
+        }
+      }, (resp) => {
+        resolve({ statusCode: resp.statusCode, headers: resp.headers });
+      });
+      r.on('error', (e) => resolve({ error: e.message }));
+      r.on('timeout', () => { r.destroy(); resolve({ error: 'HTTPS timeout (6s)' }); });
+    });
+  } catch (e) {
+    results.httpError = e.message;
+  }
+
+  res.json(results);
 });
 
 // Full-website deep crawl (page + image discovery across entire site)
