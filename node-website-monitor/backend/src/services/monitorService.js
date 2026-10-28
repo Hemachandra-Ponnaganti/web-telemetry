@@ -140,15 +140,15 @@ const fetchPageSpeedInsights = async (url) => {
   try {
     if (!url || url.includes('localhost') || url.includes('127.0.0.1')) return null;
 
-    const desktopRes = await axios.get(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=desktop`, { timeout: 45000 }).catch(e => {
+    const desktopRes = await axios.get(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=desktop`, { timeout: 8000 }).catch(e => {
       console.log('Google PSI Desktop Error:', e.response ? e.response.status : e.message);
       return null;
     });
     
-    // Wait a second between requests to prevent rate limiting
-    await new Promise(r => setTimeout(r, 1000));
+    // Wait a brief 300ms between requests
+    await new Promise(r => setTimeout(r, 300));
     
-    const mobileRes = await axios.get(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile`, { timeout: 45000 }).catch(e => {
+    const mobileRes = await axios.get(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile`, { timeout: 8000 }).catch(e => {
       console.log('Google PSI Mobile Error:', e.response ? e.response.status : e.message);
       return null;
     });
@@ -560,7 +560,7 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
   // 2. HTTP Status, TTFB, and latency tracking using axios
   const httpsAgent = new https.Agent({ rejectUnauthorized: false });
   const axiosInstance = axios.create({
-    timeout: 15000,
+    timeout: 7000,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -597,7 +597,7 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
         await page.setViewport({ width: 1366, height: 768 });
         
         ttfbStart = Date.now();
-        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 7000 });
         
         // Capture TTFB immediately after initial navigation completes, not after scrolling/waiting
         auditReport.ttfbMs = Date.now() - ttfbStart;
@@ -619,7 +619,7 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
               }, 100);
             });
           });
-          await new Promise(resolve => setTimeout(resolve, 2000)); // wait for images
+          await new Promise(resolve => setTimeout(resolve, 1500)); // wait for images
         } catch (scrollErr) {
           console.log(`Puppeteer scrolling skipped for ${url}:`, scrollErr.message);
         }
@@ -662,7 +662,7 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
             const fallbackStart = Date.now();
             const nativeReq = mod.get(url, {
               rejectUnauthorized: false,
-              timeout: 10000,
+              timeout: 5000,
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
