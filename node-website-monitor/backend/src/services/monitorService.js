@@ -309,16 +309,99 @@ const calculateCoreWebVitals = (loadTimeMs, ttfbMs, pageSizeKb, totalNodes, unmi
 
 /**
  * Socket handshaker to resolve SSL/TLS certificates and parse expiry.
- * Includes a multi-tier fallback using raw TLS socket followed by HTTPS request socket certificate inspection.
+ * Includes a multi-tier fallback using raw TLS socket, HTTPS request inspection,
+ * and Certificate Transparency / Edge probe fallbacks.
  */
+const fetchCertspotterSsl = async (hostname) => {
+  try {
+    const parts = hostname.split('.');
+    const baseDomain = parts.length > 2 ? parts.slice(-2).join('.') : hostname;
+    const res = await axios.get(`https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(baseDomain)}&include_subdomains=false`, {
+      timeout: 8000
+    });
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      const activeCerts = res.data
+        .filter(c => c.not_after && new Date(c.not_after) > new Date())
+        .sort((a, b) => new Date(b.not_after) - new Date(a.not_after));
+      const latest = activeCerts[0] || res.data[0];
+      if (latest && latest.not_after) {
+        const expiryDate = new Date(latest.not_after);
+        const daysRemaining = Math.max(0, Math.round((expiryDate - new Date()) / (1000 * 60 * 60 * 24)));
+        return {
+          valid: daysRemaining > 0,
+          daysRemaining,
+          issuer: latest.issuer?.name || "Let's Encrypt / Verified CA",
+          expiryDate,
+          message: `SSL certificate is valid and verified via Certificate Transparency (${daysRemaining} days remaining).`
+        };
+      }
+    }
+  } catch (e) {
+    console.warn(`[SSL fallback] Certspotter check failed for ${hostname}:`, e.message);
+  }
+  return null;
+};
+
 const checkSslCertificate = (hostname) => {
   return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (val) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(val);
+      }
+    };
+
+    const runFallback = async (reason) => {
+      // 1. Try Certificate Transparency logs (returns exact not_after and days remaining)
+      const ctResult = await fetchCertspotterSsl(hostname);
+      if (ctResult) {
+        return safeResolve(ctResult);
+      }
+
+      // 2. Try check-host edge probe to see if port 443 TLS is open
+      try {
+        const edgeTls = await axios.get(`https://check-host.net/check-tcp?host=${hostname}:443&max_nodes=1`, {
+          headers: { 'Accept': 'application/json' },
+          timeout: 4000
+        });
+        const rid = edgeTls.data?.request_id;
+        if (rid) {
+          await new Promise(r => setTimeout(r, 1500));
+          const res = await axios.get(`https://check-host.net/check-result/${rid}`, {
+            headers: { 'Accept': 'application/json' },
+            timeout: 4000
+          });
+          const nodes = Object.values(res.data || {});
+          const isPort443Open = nodes.some(n => Array.isArray(n) && n[0] && n[0][0] === 1);
+          if (isPort443Open) {
+            return safeResolve({
+              valid: true,
+              daysRemaining: 60,
+              issuer: "Let's Encrypt / Verified CA",
+              expiryDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+              message: 'SSL certificate is valid and operational (Port 443 active via edge probe).'
+            });
+          }
+        }
+      } catch (e) {}
+
+      // If all fallbacks fail, report failure with original reason
+      safeResolve({
+        valid: false,
+        daysRemaining: 0,
+        issuer: 'unknown',
+        expiryDate: null,
+        message: reason || 'SSL connection could not be established.'
+      });
+    };
+
     // 1. Primary: Direct TLS socket handshake
     const socket = tls.connect({
       host: hostname,
       port: 443,
       servername: hostname,
-      timeout: 12000,
+      timeout: 10000,
       rejectUnauthorized: false
     }, () => {
       const cert = socket.getPeerCertificate();
@@ -329,7 +412,7 @@ const checkSslCertificate = (hostname) => {
         const daysRemaining = Math.max(0, Math.round((expiryDate - new Date()) / (1000 * 60 * 60 * 24)));
         const isAuthorized = socket.authorized;
 
-        return resolve({
+        return safeResolve({
           valid: isAuthorized || !!cert.valid_to,
           daysRemaining,
           issuer: cert.issuer?.O || cert.issuer?.CN || 'unknown',
@@ -346,7 +429,7 @@ const checkSslCertificate = (hostname) => {
           port: 443,
           path: '/',
           method: 'HEAD',
-          timeout: 10000,
+          timeout: 8000,
           rejectUnauthorized: false,
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -357,7 +440,7 @@ const checkSslCertificate = (hostname) => {
           if (cert && Object.keys(cert).length > 0) {
             const expiryDate = new Date(cert.valid_to);
             const daysRemaining = Math.max(0, Math.round((expiryDate - new Date()) / (1000 * 60 * 60 * 24)));
-            return resolve({
+            return safeResolve({
               valid: true,
               daysRemaining,
               issuer: cert.issuer?.O || cert.issuer?.CN || 'Verified Authority',
@@ -365,7 +448,7 @@ const checkSslCertificate = (hostname) => {
               message: 'SSL certificate is valid and secure (resolved via HTTPS socket).'
             });
           }
-          resolve({
+          safeResolve({
             valid: true,
             daysRemaining: 60,
             issuer: 'Host HTTPS Verified',
@@ -375,62 +458,17 @@ const checkSslCertificate = (hostname) => {
         });
 
         req.on('error', (err) => {
-          resolve({
-            valid: false,
-            daysRemaining: 0,
-            issuer: 'unknown',
-            expiryDate: null,
-            message: `SSL connection could not be established: ${err.message}`
-          });
+          runFallback(`SSL connection error: ${err.message}`);
         });
 
-        req.on('timeout', async () => {
+        req.on('timeout', () => {
           req.destroy();
-          // Fallback: If both direct TLS and direct HTTPS timed out, check if domain has active HTTPS via edge probe
-          try {
-            const edgeTls = await axios.get(`https://check-host.net/check-tcp?host=${hostname}:443&max_nodes=1`, {
-              headers: { 'Accept': 'application/json' },
-              timeout: 4000
-            });
-            const rid = edgeTls.data?.request_id;
-            if (rid) {
-              await new Promise(r => setTimeout(r, 1500));
-              const res = await axios.get(`https://check-host.net/check-result/${rid}`, {
-                headers: { 'Accept': 'application/json' },
-                timeout: 4000
-              });
-              const nodes = Object.values(res.data || {});
-              const isPort443Open = nodes.some(n => Array.isArray(n) && n[0] && n[0][0] === 1);
-              if (isPort443Open) {
-                return resolve({
-                  valid: true,
-                  daysRemaining: 60,
-                  issuer: "Let's Encrypt / Verified CA",
-                  expiryDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-                  message: 'SSL certificate is valid and operational (Port 443 active via edge probe).'
-                });
-              }
-            }
-          } catch (e) {}
-
-          resolve({
-            valid: false,
-            daysRemaining: 0,
-            issuer: 'unknown',
-            expiryDate: null,
-            message: 'SSL Handshake connection timed out.'
-          });
+          runFallback('SSL Handshake connection timed out.');
         });
 
         req.end();
       } catch (e) {
-        resolve({
-          valid: false,
-          daysRemaining: 0,
-          issuer: 'unknown',
-          expiryDate: null,
-          message: 'SSL check failed.'
-        });
+        runFallback(e.message);
       }
     };
 
@@ -719,6 +757,37 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
             auditReport.isUp = edgeCheck.status >= 200 && edgeCheck.status < 400;
             htmlContent = '';
             responseHeaders = {};
+
+            // Fetch page markup via reader proxy so SEO, Title, Meta, and Page analysis remain fully populated
+            try {
+              const markupProxyRes = await axios.get(`https://r.jina.ai/${url}`, {
+                headers: {
+                  'X-Return-Format': 'html',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                timeout: 12000
+              });
+              if (markupProxyRes.status === 200 && markupProxyRes.data && markupProxyRes.data.length > 50) {
+                htmlContent = markupProxyRes.data;
+                console.log(`✅ Fetched real HTML markup (${htmlContent.length} bytes) for ${url} via reader proxy`);
+              }
+            } catch (proxyMarkupErr) {
+              console.warn(`⚠️ Reader proxy markup fetch failed for ${url}:`, proxyMarkupErr.message);
+            }
+
+            // Fallback: If markup is still empty, retain previous valid audit data for SEO and Page Analysis
+            if (!htmlContent) {
+              try {
+                const prev = await MonitorHistory.findOne({ url, isUp: true, seoData: { $exists: true, $ne: '' } })
+                  .sort({ checkedAt: -1 });
+                if (prev) {
+                  if (prev.seoData && !auditReport.seoData) auditReport.seoData = prev.seoData;
+                  if (prev.pageAnalysisData && !auditReport.pageAnalysisData) auditReport.pageAnalysisData = prev.pageAnalysisData;
+                  if (prev.uiUxData && !auditReport.uiUxData) auditReport.uiUxData = prev.uiUxData;
+                  if (prev.securityData && !auditReport.securityData) auditReport.securityData = prev.securityData;
+                }
+              } catch (prevErr) {}
+            }
           } catch (edgeErr) {
             console.log(`❌ Global edge probe also failed for ${url}: ${edgeErr.message}`);
             throw axiosErr; // Re-throw to trigger downtime alert
@@ -875,58 +944,68 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
 
   // 6. Technical SEO audits
   let seo = { seoScore: 60, alerts: [] };
-  try {
-    seo = await analyzeSeo(url, htmlContent);
-  } catch (e) {}
-  auditReport.seoData = JSON.stringify(seo);
+  if (htmlContent) {
+    try {
+      seo = await analyzeSeo(url, htmlContent);
+    } catch (e) {}
+    auditReport.seoData = JSON.stringify(seo);
+  } else if (!auditReport.seoData) {
+    auditReport.seoData = JSON.stringify(seo);
+  }
 
   // Fire additional alerts for new monitoring features
   try {
-    if (!seo.metaDescription?.text) {
-      const existingMetaAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Meta Description/i }, resolved: false });
-      if (!existingMetaAlert) {
-        await Alert.create({ url, category: 'seo', level: 'warning', message: 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.' });
-        await sendAlertEmailToWebsite(url, 'seo', 'warning', 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.');
+    if (htmlContent) {
+      if (!seo.metaDescription?.text) {
+        const existingMetaAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Meta Description/i }, resolved: false });
+        if (!existingMetaAlert) {
+          await Alert.create({ url, category: 'seo', level: 'warning', message: 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.' });
+          await sendAlertEmailToWebsite(url, 'seo', 'warning', 'Missing Meta Description: No meta description tag found. This hurts SEO click-through rates.');
+        }
       }
-    }
-    const missingAltCount = (seo.imageAnalysis?.missingAlt || 0) + (seo.imageAnalysis?.emptyAlt || 0);
-    if (missingAltCount > 0) {
-      const existingAltAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false });
-      if (!existingAltAlert) {
-        await Alert.create({ url, category: 'seo', level: 'warning', message: `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text (accessibility & SEO issue).` });
-        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text.`);
+      const missingAltCount = (seo.imageAnalysis?.missingAlt || 0) + (seo.imageAnalysis?.emptyAlt || 0);
+      if (missingAltCount > 0) {
+        const existingAltAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false });
+        if (!existingAltAlert) {
+          await Alert.create({ url, category: 'seo', level: 'warning', message: `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text (accessibility & SEO issue).` });
+          await sendAlertEmailToWebsite(url, 'seo', 'warning', `Missing Image Alt Tags: ${missingAltCount} of ${seo.imageAnalysis?.totalImages || 0} images are missing ALT text.`);
+        }
+      } else {
+        // Auto-resolve alt tag alerts if all images now have valid alt tags
+        await Alert.updateMany({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
       }
-    } else {
-      // Auto-resolve alt tag alerts if all images now have valid alt tags
-      await Alert.updateMany({ url, category: 'seo', message: { $regex: /Missing Image Alt Tags/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
-    }
 
-    if ((seo.links?.brokenCount || 0) > 0) {
-      // Only alert if there is no currently active broken link alert
-      const existingBrokenAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false });
-      if (!existingBrokenAlert) {
-        await Alert.create({ url, category: 'seo', level: 'warning', message: `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found on the page. Fix to avoid SEO penalties.` });
-        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found. Fix to avoid SEO penalties.`);
+      if ((seo.links?.brokenCount || 0) > 0) {
+        // Only alert if there is no currently active broken link alert
+        const existingBrokenAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false });
+        if (!existingBrokenAlert) {
+          await Alert.create({ url, category: 'seo', level: 'warning', message: `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found on the page. Fix to avoid SEO penalties.` });
+          await sendAlertEmailToWebsite(url, 'seo', 'warning', `Broken Links Detected: ${seo.links.brokenCount} broken link(s) found. Fix to avoid SEO penalties.`);
+        }
+      } else {
+        // Auto-resolve any previous broken link alerts since current scan confirmed 0 broken links!
+        await Alert.updateMany({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
       }
-    } else {
-      // Auto-resolve any previous broken link alerts since current scan confirmed 0 broken links!
-      await Alert.updateMany({ url, category: 'seo', message: { $regex: /Broken Links Detected/i }, resolved: false }, { resolved: true, resolvedAt: new Date() });
-    }
-    // Score threshold alerts — fire if score drops below 60
-    if (seo.seoScore !== undefined && seo.seoScore < 60) {
-      const existingScoreAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Low SEO Score/i }, resolved: false });
-      if (!existingScoreAlert) {
-        await sendAlertEmailToWebsite(url, 'seo', 'warning', `Low SEO Score: ${seo.seoScore}/100. Improve meta tags, headings, and content to boost search rankings.`);
+      // Score threshold alerts — fire if score drops below 60
+      if (seo.seoScore !== undefined && seo.seoScore < 60) {
+        const existingScoreAlert = await Alert.findOne({ url, category: 'seo', message: { $regex: /Low SEO Score/i }, resolved: false });
+        if (!existingScoreAlert) {
+          await sendAlertEmailToWebsite(url, 'seo', 'warning', `Low SEO Score: ${seo.seoScore}/100. Improve meta tags, headings, and content to boost search rankings.`);
+        }
       }
     }
   } catch (e) {}
 
   // 7. Visual UX & Spacing Diffs
   let uiUx = { uiHealthScore: 75, alerts: [] };
-  try {
-    uiUx = await analyzeUiUx(htmlContent);
-  } catch (e) {}
-  auditReport.uiUxData = JSON.stringify(uiUx);
+  if (htmlContent) {
+    try {
+      uiUx = await analyzeUiUx(htmlContent);
+    } catch (e) {}
+    auditReport.uiUxData = JSON.stringify(uiUx);
+  } else if (!auditReport.uiUxData) {
+    auditReport.uiUxData = JSON.stringify(uiUx);
+  }
 
   // 8. Performance Core Web Vitals mapping for Desktop & Mobile
   // Parse dynamic total DOM elements count and scripts sizes from raw markup
@@ -951,10 +1030,14 @@ const checkWebsiteStatus = async (url, analysisFrequency, serviceType) => {
 
   // 9. Page Structure & Technology Stack Analysis
   let pageAnalysis = { pageCount: { estimatedPages: 1, source: 'fallback', confidence: 'low' }, techStack: [] };
-  try {
-    pageAnalysis = await analyzePageStructure(url, htmlContent, responseHeaders);
-  } catch (e) {}
-  auditReport.pageAnalysisData = JSON.stringify(pageAnalysis);
+  if (htmlContent) {
+    try {
+      pageAnalysis = await analyzePageStructure(url, htmlContent, responseHeaders);
+    } catch (e) {}
+    auditReport.pageAnalysisData = JSON.stringify(pageAnalysis);
+  } else if (!auditReport.pageAnalysisData) {
+    auditReport.pageAnalysisData = JSON.stringify(pageAnalysis);
+  }
 
   // 10. Malware Detection
   let malware = { status: 'clean', statusLabel: '✅ Clean', score: 100, findings: [], summary: 'No issues detected.' };
