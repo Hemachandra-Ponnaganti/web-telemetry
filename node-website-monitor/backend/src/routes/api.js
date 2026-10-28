@@ -19,7 +19,21 @@ const {
 router.post('/audit', triggerAudit);
 
 router.get('/health-check', (req, res) => {
-  res.json({ status: 'ok', version: 'debug-probe', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: 'd7822bd', timestamp: new Date().toISOString() });
+});
+
+router.get('/sync-target', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'Missing url query parameter.' });
+  try {
+    const { checkWebsiteStatus, compileStats } = require('../services/monitorService');
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    const report = await checkWebsiteStatus(normalizedUrl);
+    const freshStats = await compileStats(normalizedUrl);
+    res.json({ success: true, report: { isUp: report.isUp, statusCode: report.statusCode, ssl: report.ssl }, freshStats });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 router.get('/debug-probe', async (req, res) => {
