@@ -19,6 +19,7 @@ import AdminLogin from './components/AdminLogin';
 import DomainExpiryDashboard from './components/DomainExpiryDashboard';
 import WebsitesCatalog from './components/WebsitesCatalog';
 import DatabaseDashboard from './components/DatabaseDashboard';
+import ClientViewDashboard from './components/ClientViewDashboard';
 
 // ── Error Boundary — catches render errors in dropdown/child components
 // without blanking the entire page ──────────────────────────────────────────
@@ -103,8 +104,30 @@ export default function App() {
   const [scanProgress, setScanProgress] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
-  // View state: 'grid' (Websites catalog page) vs 'detail' (Full website SRE tracking page)
-  const [viewMode, setViewMode] = useState('grid');
+  // Check URL params for client portal link on page load
+  const isDirectClient = typeof window !== 'undefined' && 
+    new URLSearchParams(window.location.search).get('client') === '1';
+
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('client') === '1' && params.get('site')) {
+        return 'client';
+      }
+    }
+    return 'grid';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const clientSite = params.get('site');
+      if (params.get('client') === '1' && clientSite) {
+        setUrl(clientSite);
+        setViewMode('client');
+      }
+    }
+  }, []);
 
   const handleSelectWebsite = (siteUrl) => {
     setUrl(siteUrl);
@@ -664,24 +687,30 @@ export default function App() {
       <header className="bg-dark-800/80 backdrop-blur-md border-b border-slate-800/60 sticky top-0 z-50 shadow-md">
         <div className="px-4 md:px-6 h-16 flex items-center justify-between gap-4">
 
-          {/* Left: Logo + hamburger (mobile) */}
+          {/* Left: Logo + hamburger (hidden in client mode) */}
           <div className="flex items-center gap-3">
-            {/* Hamburger — only visible on mobile */}
-            <button
-              className="md:hidden p-2 rounded-xl border border-slate-800 hover:bg-slate-800/60 transition-all text-slate-400 hover:text-slate-200 cursor-pointer"
-              onClick={() => setSidebarOpen(v => !v)}
-              aria-label="Toggle navigation"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
+            {/* Hamburger — only visible when not in client view */}
+            {viewMode !== 'client' && (
+              <button
+                className="md:hidden p-2 rounded-xl border border-slate-800 hover:bg-slate-800/60 transition-all text-slate-400 hover:text-slate-200 cursor-pointer"
+                onClick={() => setSidebarOpen(v => !v)}
+                aria-label="Toggle navigation"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+            )}
 
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-600/25 shrink-0 text-xs">
                 GA
               </div>
               <div>
-                <h1 className="text-sm font-extrabold tracking-tight">GA Web Telemetry</h1>
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block -mt-1">Node SRE Module</span>
+                <h1 className="text-sm font-extrabold tracking-tight">
+                  {viewMode === 'client' ? 'Client Performance Portal' : 'GA Web Telemetry'}
+                </h1>
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block -mt-1">
+                  {viewMode === 'client' ? 'Secure Live Metrics' : 'Node SRE Module'}
+                </span>
               </div>
             </div>
 
@@ -694,7 +723,15 @@ export default function App() {
             </button>
           </div>
 
-
+          {/* Right: Exit Preview button for Admin (only shown in preview, NOT for direct clients) */}
+          {viewMode === 'client' && !isDirectClient && (
+            <button
+              onClick={() => setViewMode('detail')}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600 border border-slate-700 hover:border-indigo-500 text-xs font-bold text-slate-200 hover:text-white transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+            >
+              <span>← Exit Client Preview</span>
+            </button>
+          )}
 
         </div>
       </header>
@@ -703,7 +740,7 @@ export default function App() {
       <div className="flex relative z-10" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
         {/* ── MOBILE OVERLAY ── */}
-        {viewMode !== 'grid' && sidebarOpen && (
+        {viewMode === 'detail' && sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/60 z-40 md:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -711,7 +748,7 @@ export default function App() {
         )}
 
         {/* ── LEFT SIDEBAR (Only visible when viewing site detail telemetry) ── */}
-        {viewMode !== 'grid' && (
+        {viewMode === 'detail' && (
           <aside className={`
             fixed top-16 left-0 z-30
             h-[calc(100vh-64px)]
@@ -824,7 +861,7 @@ export default function App() {
         )}
 
         {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
-        <main className={`flex-1 min-w-0 px-4 md:px-6 py-8 pb-12 ${viewMode !== 'grid' ? 'md:ml-56' : ''}`}>
+        <main className={`flex-1 min-w-0 px-4 md:px-6 py-8 pb-12 ${viewMode === 'detail' ? 'md:ml-56' : ''}`}>
 
           {error && (
             <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 text-sm animate-fade-in-up">
@@ -843,19 +880,40 @@ export default function App() {
               onDeleteWebsite={handleDeleteWebsite}
               onToggleFavorite={toggleFavorite}
               onRefreshTargets={fetchTargets}
+              onOpenClientView={(siteUrl) => {
+                setUrl(siteUrl);
+                setViewMode('client');
+              }}
               isScanning={auditLoading}
             />
+          ) : viewMode === 'client' ? (
+            /* 2. CLIENT PERFORMANCE PORTAL VIEW */
+            <ClientViewDashboard
+              initialUrl={url}
+              onBack={!isDirectClient ? () => setViewMode('detail') : null}
+              isDirectClient={isDirectClient}
+              isDark={isDark}
+            />
           ) : (
-            /* 2. FULL TRACKING DETAIL DASHBOARD VIEW */
+            /* 3. FULL TRACKING DETAIL DASHBOARD VIEW */
             <div className="space-y-6">
-              {/* Back to Catalog bar */}
-              <div className="flex justify-between items-center">
+              {/* Back to Catalog and Client View action bar */}
+              <div className="flex justify-between items-center gap-2 flex-wrap">
                 <button
                   onClick={() => { setViewMode('grid'); fetchTargets(); }}
                   className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-600 border border-slate-800 hover:border-indigo-500 text-slate-300 hover:text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm group"
                 >
                   <span className="group-hover:-translate-x-1 transition-transform">←</span>
                   <span>Back to Websites Catalog</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('client')}
+                  className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-300 hover:text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                  title="Preview client-facing performance dashboard"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>Preview Client View</span>
                 </button>
               </div>
 
@@ -1014,32 +1072,34 @@ export default function App() {
             </div>
           )}
 
-          {/* Targets Switcher Pill Bar */}
-          <div className="mt-12 pt-6 border-t border-slate-800/80 animate-fade-in-up">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-2.5">Audited Targets (Previous Links Scan History)</span>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-              {targets.length === 0 ? (
-                <span className="text-xs text-slate-500 italic">No targets audited yet. Enter a website URL above to begin scanning.</span>
-              ) : (
-                targets.map((tgt) => {
-                  const isActive = normalizeUrlString(url) === normalizeUrlString(tgt.url);
-                  return (
-                    <button
-                      key={tgt.url}
-                      onClick={() => { setUrl(tgt.url); fetchStats(tgt.url); }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0 ${isActive
-                        ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-md shadow-indigo-500/5'
-                        : 'bg-dark-800/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                        }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full ${tgt.isUp ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}></span>
-                      <span>{tgt.url.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span>
-                    </button>
-                  );
-                })
-              )}
+          {/* Targets Switcher Pill Bar (Hidden in client view mode) */}
+          {viewMode !== 'client' && (
+            <div className="mt-12 pt-6 border-t border-slate-800/80 animate-fade-in-up">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-2.5">Audited Targets (Previous Links Scan History)</span>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {targets.length === 0 ? (
+                  <span className="text-xs text-slate-500 italic">No targets audited yet. Enter a website URL above to begin scanning.</span>
+                ) : (
+                  targets.map((tgt) => {
+                    const isActive = normalizeUrlString(url) === normalizeUrlString(tgt.url);
+                    return (
+                      <button
+                        key={tgt.url}
+                        onClick={() => { setUrl(tgt.url); fetchStats(tgt.url); }}
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0 ${isActive
+                          ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-md shadow-indigo-500/5'
+                          : 'bg-dark-800/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                          }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${tgt.isUp ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`}></span>
+                        <span>{tgt.url.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
         </main>
       </div>

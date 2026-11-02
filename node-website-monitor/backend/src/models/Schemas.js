@@ -520,6 +520,10 @@ const websiteEmailConfigSchema = new mongoose.Schema({
   url:                  { type: String, required: true, unique: true },
   alertEmail:           { type: String, default: '' },
   alertCc:              { type: String, default: '' },
+  // Team-specific alert routing
+  devEmail:             { type: String, default: '' },
+  uiEmail:              { type: String, default: '' },
+  contentEmail:         { type: String, default: '' },
   alertsEnabled:        { type: Boolean, default: false },
   alertFrequency:       { type: String, enum: ['instant', 'daily', 'weekly'], default: 'instant' },
   lastEmailSent:        { type: Date, default: null },
@@ -578,7 +582,7 @@ const WebsiteEmailConfig = {
       saveToDisk();
       return inMemoryEmailConfig[index];
     } else if (options.upsert) {
-      const doc = { url: query.url, alertEmail: '', alertCc: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', lastEmailSent: null, lastWarningEmailSent: null, reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', reportDay: 1, reportHour: 9, reportTimezone: 'UTC', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
+      const doc = { url: query.url, alertEmail: '', alertCc: '', devEmail: '', uiEmail: '', contentEmail: '', alertsEnabled: false, alertFrequency: 'instant', totalEmailsSent: 0, lastAlertType: '', lastEmailSent: null, lastWarningEmailSent: null, reportEmail: '', reportCc: '', reportsEnabled: false, reportFrequency: '48h', reportDay: 1, reportHour: 9, reportTimezone: 'UTC', lastReportSent: null, updatedAt: new Date(), _id: 'econf_' + Math.random().toString(36).substr(2, 9), ...updateData };
       inMemoryEmailConfig.push(doc);
       saveToDisk();
       return doc;
@@ -614,6 +618,7 @@ const searchHistorySchema = new mongoose.Schema({
 const scannedWebsiteSchema = new mongoose.Schema({
   url: { type: String, required: true, unique: true },
   name: { type: String },
+  clientToken: { type: String }, // Shareable token for client portal access
   isUp: { type: Boolean, default: true },
   statusCode: { type: Number },
   lastScannedAt: { type: Date, default: Date.now },

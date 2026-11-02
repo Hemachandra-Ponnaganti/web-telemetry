@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Globe, Plus, Search, Star, ExternalLink, Activity, ShieldCheck, 
-  Trash2, RefreshCw, Lock, ArrowUpRight, Filter, Layers, CheckCircle2, AlertCircle, X 
+  Trash2, RefreshCw, Lock, ArrowUpRight, Filter, Layers, CheckCircle2, AlertCircle, X, Eye 
 } from 'lucide-react';
 
 export default function WebsitesCatalog({ 
@@ -12,6 +12,7 @@ export default function WebsitesCatalog({
   onDeleteWebsite, 
   onToggleFavorite,
   onRefreshTargets,
+  onOpenClientView,
   isScanning = false 
 }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -377,15 +378,29 @@ export default function WebsitesCatalog({
                   </div>
                 </div>
 
-                {/* Card Footer: Manage & Track Full Button */}
-                <div className="p-4 bg-dark-900/40 border-t border-slate-800/60">
+                {/* Card Footer: Manage & Full Track + Client View Buttons */}
+                <div className="p-3 bg-dark-900/40 border-t border-slate-800/60 flex items-center gap-2">
                   <button
                     onClick={() => onSelectWebsite(site.url)}
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-indigo-600 text-slate-200 hover:text-white font-extrabold text-xs rounded-xl border border-slate-800 hover:border-indigo-500 flex items-center justify-center gap-2 transition-all duration-200 shadow-sm cursor-pointer"
+                    className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-indigo-600 text-slate-200 hover:text-white font-extrabold text-xs rounded-xl border border-slate-800 hover:border-indigo-500 flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm cursor-pointer"
                   >
-                    <span>Manage & Full Track</span>
-                    <ArrowUpRight className="h-4 w-4" />
+                    <span>Full Track</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </button>
+
+                  {onOpenClientView && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenClientView(site.url);
+                      }}
+                      className="py-2.5 px-3 bg-indigo-600/15 hover:bg-indigo-600 border border-indigo-500/30 hover:border-indigo-500 text-indigo-300 hover:text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm cursor-pointer"
+                      title="Open client-facing performance dashboard"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Client View</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

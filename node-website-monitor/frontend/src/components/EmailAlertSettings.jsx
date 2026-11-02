@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import {
   Mail, Bell, BellOff, Send, CheckCircle2, AlertCircle,
   RefreshCw, Clock, Shield, Globe, Activity, ToggleLeft, ToggleRight,
-  AlertTriangle, Info, Inbox
+  AlertTriangle, Info, Inbox, Code, Layout, Edit3, Users
 } from 'lucide-react';
 
 import { API_BASE } from '../apiConfig';
@@ -40,6 +40,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
   const [config, setConfig] = useState({
     alertEmail:     '',
     alertCc:        '',
+    devEmail:       '',
+    uiEmail:        '',
+    contentEmail:   '',
     alertsEnabled:  false,
     alertFrequency: 'instant',
     reportEmail:    '',
@@ -54,10 +57,13 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
     lastAlertType:   '',
     lastReportSent:  null,
   });
-  const [emailInput, setEmailInput]             = useState('');
-  const [alertCcInput, setAlertCcInput]         = useState('');
-  const [reportEmailInput, setReportEmailInput] = useState('');
-  const [reportCcInput, setReportCcInput]       = useState('');
+  const [emailInput, setEmailInput]               = useState('');
+  const [alertCcInput, setAlertCcInput]           = useState('');
+  const [devEmailInput, setDevEmailInput]         = useState('');
+  const [uiEmailInput, setUiEmailInput]           = useState('');
+  const [contentEmailInput, setContentEmailInput] = useState('');
+  const [reportEmailInput, setReportEmailInput]   = useState('');
+  const [reportCcInput, setReportCcInput]         = useState('');
   const [emailError, setEmailError]   = useState('');
   const [saving, setSaving]           = useState(false);
   const [testing, setTesting]         = useState(false);
@@ -75,6 +81,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       setConfig(data);
       setEmailInput(data.alertEmail || '');
       setAlertCcInput(data.alertCc || '');
+      setDevEmailInput(data.devEmail || '');
+      setUiEmailInput(data.uiEmail || '');
+      setContentEmailInput(data.contentEmail || '');
       setReportEmailInput(data.reportEmail || '');
       setReportCcInput(data.reportCc || '');
     } catch (err) {
@@ -154,6 +163,18 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
       setEmailError('Please enter valid CC email addresses separated by commas.');
       return;
     }
+    if (devEmailInput && !areValidEmails(devEmailInput)) {
+      setEmailError('Please enter valid Development team email addresses.');
+      return;
+    }
+    if (uiEmailInput && !areValidEmails(uiEmailInput)) {
+      setEmailError('Please enter valid UI/UX team email addresses.');
+      return;
+    }
+    if (contentEmailInput && !areValidEmails(contentEmailInput)) {
+      setEmailError('Please enter valid Content Creator email addresses.');
+      return;
+    }
     if (reportEmailInput && !areValidEmails(reportEmailInput)) {
       setEmailError('Please enter a valid report email address (or comma-separated emails).');
       return;
@@ -169,6 +190,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         url:            siteUrl,
         alertEmail:     emailInput,
         alertCc:        alertCcInput,
+        devEmail:       devEmailInput,
+        uiEmail:        uiEmailInput,
+        contentEmail:   contentEmailInput,
         alertsEnabled:  config.alertsEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput,
@@ -184,6 +208,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
           ...prev,
           alertEmail: emailInput,
           alertCc: alertCcInput,
+          devEmail: devEmailInput,
+          uiEmail: uiEmailInput,
+          contentEmail: contentEmailInput,
           reportEmail: reportEmailInput,
           reportCc: reportCcInput
         }));
@@ -202,8 +229,8 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
   };
 
   const handleToggle = async () => {
-    if (!config.alertEmail && !emailInput) {
-      setEmailError('Enter an email address before enabling alerts.');
+    if (!config.alertEmail && !emailInput && !devEmailInput && !uiEmailInput && !contentEmailInput) {
+      setEmailError('Enter an alert email address before enabling alerts.');
       return;
     }
     const newEnabled = !config.alertsEnabled;
@@ -213,6 +240,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         url:            siteUrl,
         alertEmail:     emailInput || config.alertEmail,
         alertCc:        alertCcInput !== undefined ? alertCcInput : config.alertCc,
+        devEmail:       devEmailInput !== undefined ? devEmailInput : config.devEmail,
+        uiEmail:        uiEmailInput !== undefined ? uiEmailInput : config.uiEmail,
+        contentEmail:   contentEmailInput !== undefined ? contentEmailInput : config.contentEmail,
         alertsEnabled:  newEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput || config.reportEmail,
@@ -242,6 +272,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         url:            siteUrl,
         alertEmail:     emailInput || config.alertEmail,
         alertCc:        alertCcInput !== undefined ? alertCcInput : config.alertCc,
+        devEmail:       devEmailInput !== undefined ? devEmailInput : config.devEmail,
+        uiEmail:        uiEmailInput !== undefined ? uiEmailInput : config.uiEmail,
+        contentEmail:   contentEmailInput !== undefined ? contentEmailInput : config.contentEmail,
         alertsEnabled:  config.alertsEnabled,
         alertFrequency: config.alertFrequency,
         reportEmail:    reportEmailInput || config.reportEmail,
@@ -349,9 +382,9 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
         {/* Alert email input */}
         <div className="space-y-2">
           <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-            Alert Email Address *
+            General / SRE Alert Email Address (Fallback)
           </label>
-          <div className={`flex items-center gap-2 bg-slate-900/60 border rounded-xl px-3.5 py-2.5 transition-all ${emailError ? 'border-rose-500/50' : 'border-slate-800 focus-within:border-indigo-500/60'}`}>
+          <div className={`flex items-center gap-2 bg-slate-900/60 border rounded-xl px-3.5 py-2.5 transition-all ${emailError && !devEmailInput && !uiEmailInput && !contentEmailInput && !emailInput ? 'border-rose-500/50' : 'border-slate-800 focus-within:border-indigo-500/60'}`}>
             <Mail className="h-4 w-4 text-slate-500 shrink-0" />
             <input
               type="text"
@@ -365,14 +398,96 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
             )}
           </div>
           <p className="text-[10px] text-slate-500 italic">
-            Primary email address for critical downtime & vulnerability alerts.
+            Default recipient if a specific vertical team email is not configured below.
           </p>
+        </div>
+
+        {/* ── Dedicated Team Verticals Routing ─────────────────────────────────── */}
+        <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-800/60">
+            <Users className="h-4 w-4 text-indigo-400" />
+            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+              Vertical Team Alert Routing
+            </h4>
+          </div>
+          <p className="text-[10px] text-slate-400">
+            Direct specific issues to the designated person or team responsible.
+          </p>
+
+          {/* Development Team */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-blue-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Code className="h-3.5 w-3.5" /> Development Team Email
+              </label>
+              <span className="text-[9px] text-slate-500">Downtime, DB, SSL, Malware, WordPress</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 focus-within:border-blue-500/60 rounded-xl px-3 py-2 transition-all">
+              <Mail className="h-3.5 w-3.5 text-blue-400/70 shrink-0" />
+              <input
+                type="text"
+                placeholder="dev-team@company.com, backend@company.com"
+                value={devEmailInput}
+                onChange={e => { setDevEmailInput(e.target.value); setEmailError(''); }}
+                className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+              />
+              {devEmailInput && areValidEmails(devEmailInput) && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+              )}
+            </div>
+          </div>
+
+          {/* UI/UX Team */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Layout className="h-3.5 w-3.5" /> UI / UX Team Email
+              </label>
+              <span className="text-[9px] text-slate-500">Broken Links, Performance, Forms, Layout</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 focus-within:border-purple-500/60 rounded-xl px-3 py-2 transition-all">
+              <Mail className="h-3.5 w-3.5 text-purple-400/70 shrink-0" />
+              <input
+                type="text"
+                placeholder="uiux-team@company.com, designer@company.com"
+                value={uiEmailInput}
+                onChange={e => { setUiEmailInput(e.target.value); setEmailError(''); }}
+                className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+              />
+              {uiEmailInput && areValidEmails(uiEmailInput) && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+              )}
+            </div>
+          </div>
+
+          {/* Content Creator Team */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Edit3 className="h-3.5 w-3.5" /> Content Creator Email
+              </label>
+              <span className="text-[9px] text-slate-500">SEO meta descriptions, Missing ALT tags, Content scores</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-950/70 border border-slate-800 focus-within:border-emerald-500/60 rounded-xl px-3 py-2 transition-all">
+              <Mail className="h-3.5 w-3.5 text-emerald-400/70 shrink-0" />
+              <input
+                type="text"
+                placeholder="content@company.com, seo@company.com"
+                value={contentEmailInput}
+                onChange={e => { setContentEmailInput(e.target.value); setEmailError(''); }}
+                className="bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600 w-full"
+              />
+              {contentEmailInput && areValidEmails(contentEmailInput) && (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Alert CC input */}
         <div className="space-y-2">
           <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
-            <span>Alert CC Recipients (Optional)</span>
+            <span>Global Alert CC Recipients (Optional)</span>
             <span className="text-[9px] text-slate-500 normal-case font-normal">Comma-separated</span>
           </label>
           <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 focus-within:border-indigo-500/60 rounded-xl px-3.5 py-2.5 transition-all">
@@ -389,7 +504,7 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
             )}
           </div>
           <p className="text-[10px] text-slate-500 italic">
-            Copy team members on every automated incident alert.
+            Copy supervisor or lead on every automated incident alert across teams.
           </p>
         </div>
 
@@ -652,7 +767,7 @@ export default function EmailAlertSettings({ siteUrl, showToast }) {
 
           <button
             onClick={handleTestEmail}
-            disabled={testing || !config.alertEmail}
+            disabled={testing || (!config.alertEmail && !config.devEmail && !config.uiEmail && !config.contentEmail)}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600/80 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-all disabled:opacity-50"
           >
             {testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}

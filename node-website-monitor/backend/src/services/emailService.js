@@ -353,129 +353,234 @@ const initializeEmailQueue = async () => {
 };
 
 /**
- * Per-website alert email sender.
+ * Map issue category/message to specific team vertical:
+ * - Development: downtime, database, ssl, security, malware, wordpress, api latency
+ * - UI/UX: broken links, performance, responsive/mobile, forms
+ * - Content Creator: seo, missing alt tags, meta descriptions, text quality
+ */
+const getTeamForIssue = (category = '', message = '') => {
+  const cat = String(category).toLowerCase();
+  const msg = String(message).toLowerCase();
+
+  // Content Creator specific patterns
+  if (
+    cat === 'seo' || 
+    msg.includes('meta description') || 
+    msg.includes('alt tag') || 
+    msg.includes('alt text') || 
+    msg.includes('seo score') || 
+    msg.includes('heading') || 
+    msg.includes('content')
+  ) {
+    return 'content';
+  }
+
+  // UI/UX specific patterns
+  if (
+    cat === 'uiux' || 
+    cat === 'accessibility' || 
+    cat === 'performance' || 
+    cat === 'links' || 
+    msg.includes('broken link') || 
+    msg.includes('performance') || 
+    msg.includes('speed') || 
+    msg.includes('responsive') || 
+    msg.includes('mobile') || 
+    msg.includes('form') || 
+    msg.includes('layout')
+  ) {
+    return 'ui';
+  }
+
+  // Default to Development for infrastructure, server, code, security, wordpress
+  return 'dev';
+};
+
+/**
+ * Per-website alert email sender with team-based vertical routing.
  */
 const sendAlertEmailToWebsite = async (url, category, level, message, extraIssues = []) => {
   try {
     const { WebsiteEmailConfig } = require('../models/Schemas');
+    const settings = loadSettings();
     
     const config = await WebsiteEmailConfig.findOne({ url });
-    if (!config || !config.alertsEnabled || !config.alertEmail) return;
-    
-    const allIssues = [{ category, level, message }, ...extraIssues];
-    const hasMultiple = allIssues.length > 1;
-    const topLevel = allIssues.some(i => i.level === 'critical') ? 'critical' : allIssues.some(i => i.level === 'warning') ? 'warning' : 'info';
+    if (!config || !config.alertsEnabled) return;
 
-    // ── Frequency & Throttle Rules ──────────────────────────────────────────
-    // 1. Critical alerts (downtime, db error, urgent SSL expiry): ALWAYS send immediately for every scan!
-    // 2. Warning / Info alerts (SEO, missing alt tags, non-critical): Throttled to once every 3 days (72 hours).
-    if (topLevel !== 'critical') {
-      const lastSentTime = config.lastWarningEmailSent || config.lastEmailSent;
-      if (lastSentTime) {
-        const hoursSince = (Date.now() - new Date(lastSentTime).getTime()) / (1000 * 60 * 60);
-        if (hoursSince < 72) {
-          console.log(`⏳ [Alert Throttle] Skipping non-critical ${topLevel} alert for ${url} (last sent ${hoursSince.toFixed(1)}h ago; minimum cooldown: 72h / 3 days).`);
-          return;
+    // Group issues by target vertical
+    const allIssues = [{ category, level, message }, ...extraIssues];
+    const groupedIssues = {
+      dev: [],
+      ui: [],
+      content: []
+    };
+
+    for (const issue of allIssues) {
+      const team = getTeamForIssue(issue.category, issue.message);
+      groupedIssues[team].push(issue);
+    }
+
+    const teamNames = {
+      dev: 'Development Team',
+      ui: 'UI/UX Team',
+      content: 'Content & Editorial Team'
+    };
+
+    const teamBadgeColors = {
+      dev: '#3b82f6',     // Blue
+      ui: '#8b5cf6',      // Purple
+      content: '#10b981'  // Emerald Green
+    };
+
+    // Dispatch emails per vertical that has issues
+    for (const [teamKey, issues] of Object.entries(groupedIssues)) {
+      if (issues.length === 0) continue;
+
+      // Determine recipient for this vertical:
+      // 1. Per-website team email (devEmail / uiEmail / contentEmail)
+      // 2. Global team fallback from settings (dev_alert_email / ui_alert_email / content_alert_email)
+      // 3. Per-website general alertEmail
+      // 4. Global general alert_email_recipients
+      let targetRecipient = '';
+      if (teamKey === 'dev') {
+        targetRecipient = config.devEmail || settings.dev_alert_email || config.alertEmail || settings.alert_email_recipients;
+      } else if (teamKey === 'ui') {
+        targetRecipient = config.uiEmail || settings.ui_alert_email || config.alertEmail || settings.alert_email_recipients;
+      } else if (teamKey === 'content') {
+        targetRecipient = config.contentEmail || settings.content_alert_email || config.alertEmail || settings.alert_email_recipients;
+      }
+
+      if (!targetRecipient) {
+        console.log(`ℹ️ [Alert Routing] No recipient found for ${teamNames[teamKey]} on ${url}. Skipping.`);
+        continue;
+      }
+
+      const teamHasMultiple = issues.length > 1;
+      const teamTopLevel = issues.some(i => i.level === 'critical') ? 'critical' : issues.some(i => i.level === 'warning') ? 'warning' : 'info';
+
+      // ── Frequency & Throttle Rules ──────────────────────────────────────────
+      if (teamTopLevel !== 'critical') {
+        const lastSentTime = config.lastWarningEmailSent || config.lastEmailSent;
+        if (lastSentTime) {
+          const hoursSince = (Date.now() - new Date(lastSentTime).getTime()) / (1000 * 60 * 60);
+          if (hoursSince < 72) {
+            console.log(`⏳ [Alert Throttle] Skipping non-critical ${teamTopLevel} alert for ${url} [${teamNames[teamKey]}] (last sent ${hoursSince.toFixed(1)}h ago; minimum cooldown: 72h).`);
+            continue;
+          }
+        }
+      } else {
+        if (config.alertFrequency !== 'instant' && config.lastEmailSent) {
+          const hoursSince = (Date.now() - new Date(config.lastEmailSent).getTime()) / (1000 * 60 * 60);
+          if (config.alertFrequency === 'daily' && hoursSince < 24) continue;
+          if (config.alertFrequency === 'weekly' && hoursSince < 168) continue;
         }
       }
-    } else {
-      // For critical alerts, check alertFrequency only if explicitly configured to daily/weekly summary mode
-      if (config.alertFrequency !== 'instant' && config.lastEmailSent) {
-        const hoursSince = (Date.now() - new Date(config.lastEmailSent).getTime()) / (1000 * 60 * 60);
-        if (config.alertFrequency === 'daily' && hoursSince < 24) return;
-        if (config.alertFrequency === 'weekly' && hoursSince < 168) return;
-      }
-    }
-    
-    const emails = config.alertEmail.split(',').map(e => e.trim()).filter(Boolean);
-    const recipient = emails[0];
-    const ccList = [
-      ...emails.slice(1),
-      ...(config.alertCc ? config.alertCc.split(',').map(e => e.trim()).filter(Boolean) : [])
-    ];
-    const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
-    
-    const subject = hasMultiple
-      ? `[Website Monitor] ${allIssues.length} Issues Found — ${url}`
-      : `[Website Monitor] ${level.charAt(0).toUpperCase() + level.slice(1)} Alert — ${url}`;
-      
-    const levelColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
-    const issuesHtml = allIssues.map(issue => `
-      <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">
-          <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:800;color:white;background:${levelColor[issue.level] || '#6366f1'};text-transform:uppercase;">${issue.level}</span>
-        </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:700;color:#334155;font-size:12px;">${issue.category.toUpperCase()}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:12px;">${issue.message}</td>
-      </tr>`).join('');
-      
-    const recommendationsHtml = allIssues.map(issue => {
-      const recs = {
-        uptime: 'Check your hosting server immediately. Verify server health and restart if needed.',
-        ssl: 'Renew your SSL certificate before expiry. Contact your SSL provider urgently.',
-        seo: 'Review your page metadata — add missing titles, descriptions, and ALT tags.',
-        security: 'Review your HTTP security headers and enable CSP, HSTS, and X-Frame-Options.',
-        performance: 'Optimise images, minify scripts, and enable caching to improve load times.',
-        wordpress: 'Update WordPress core, plugins, and themes. Check for vulnerabilities.',
-      };
-      return `<li style="margin-bottom:6px;color:#475569;font-size:12px;">${recs[issue.category] || 'Review the issue and take corrective action.'}</li>`;
-    }).join('');
-    
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;padding:20px;color:#1e293b;">
-      <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 6px rgba(0,0,0,0.05);overflow:hidden;">
-        <div style="background:${levelColor[topLevel]};color:white;padding:20px 24px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;opacity:0.85;margin-bottom:4px;">Website Monitor Alert</div>
-          <div style="font-size:18px;font-weight:800;">${hasMultiple ? `${allIssues.length} Issues Detected` : message}</div>
-        </div>
-        <div style="padding:24px;">
-          <div style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;">
-            <strong>Website:</strong> <a href="${url}" style="color:#4f46e5;">${url}</a><br>
-            <strong>Detected At:</strong> ${new Date().toLocaleString()}<br>
-            <strong>Severity:</strong> ${topLevel.toUpperCase()}
+
+      const emailList = targetRecipient.split(',').map(e => e.trim()).filter(Boolean);
+      const recipient = emailList[0];
+      const ccList = [
+        ...emailList.slice(1),
+        ...(config.alertCc ? config.alertCc.split(',').map(e => e.trim()).filter(Boolean) : [])
+      ];
+      const cc = ccList.length > 0 ? ccList.join(', ') : undefined;
+
+      const subject = teamHasMultiple
+        ? `[Website Monitor - ${teamNames[teamKey]}] ${issues.length} Issues Found — ${url}`
+        : `[Website Monitor - ${teamNames[teamKey]}] ${teamTopLevel.charAt(0).toUpperCase() + teamTopLevel.slice(1)} Alert — ${url}`;
+
+      const levelColor = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+      const issuesHtml = issues.map(issue => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">
+            <span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:800;color:white;background:${levelColor[issue.level] || '#6366f1'};text-transform:uppercase;">${issue.level}</span>
+          </td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:700;color:#334155;font-size:12px;">${issue.category.toUpperCase()}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:12px;">${issue.message}</td>
+        </tr>`).join('');
+
+      const recommendationsHtml = issues.map(issue => {
+        const recs = {
+          uptime: 'Check your hosting server immediately. Verify server health and restart if needed.',
+          database: 'Inspect database credentials, server connectivity, and running MySQL/Postgres services.',
+          ssl: 'Renew your SSL certificate before expiry. Contact your SSL provider urgently.',
+          seo: 'Review your page metadata — add missing titles, descriptions, and ALT tags.',
+          security: 'Review your HTTP security headers and enable CSP, HSTS, and X-Frame-Options.',
+          performance: 'Optimise images, minify scripts, and enable caching to improve load times.',
+          wordpress: 'Update WordPress core, plugins, and themes. Check for vulnerabilities.',
+          uiux: 'Check layout responsiveness and visual elements across different screen widths.',
+          links: 'Fix or redirect broken URLs to avoid 404 dead ends.'
+        };
+        return `<li style="margin-bottom:6px;color:#475569;font-size:12px;">${recs[issue.category] || 'Review the issue and take corrective action.'}</li>`;
+      }).join('');
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;padding:20px;color:#1e293b;">
+        <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 6px rgba(0,0,0,0.05);overflow:hidden;">
+          <div style="background:${levelColor[teamTopLevel]};color:white;padding:20px 24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;opacity:0.9;">Website Monitor Alert</span>
+              <span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;">${teamNames[teamKey]}</span>
+            </div>
+            <div style="font-size:18px;font-weight:800;">${teamHasMultiple ? `${issues.length} ${teamNames[teamKey]} Issues Detected` : issues[0].message}</div>
           </div>
-          ${hasMultiple ? `
-          <h3 style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px;">Issues Found</h3>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-            <thead><tr style="background:#f8fafc;">
-              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Severity</th>
-              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Category</th>
-              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Details</th>
-            </tr></thead>
-            <tbody>${issuesHtml}</tbody>
-          </table>` : `<p style="color:#475569;font-size:13px;margin:0 0 20px;">${message}</p>`}
-          <h3 style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 8px;">Recommendations</h3>
-          <ul style="padding-left:20px;margin:0 0 20px;">${recommendationsHtml}</ul>
+          <div style="padding:24px;">
+            <div style="background:#f1f5f9;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;">
+              <strong>Website:</strong> <a href="${url}" style="color:#4f46e5;">${url}</a><br>
+              <strong>Assigned Team:</strong> <span style="font-weight:700;color:${teamBadgeColors[teamKey]};">${teamNames[teamKey]}</span><br>
+              <strong>Detected At:</strong> ${new Date().toLocaleString()}<br>
+              <strong>Severity:</strong> ${teamTopLevel.toUpperCase()}
+            </div>
+            ${teamHasMultiple ? `
+            <h3 style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 10px;">Issues Requiring Attention</h3>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+              <thead><tr style="background:#f8fafc;">
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Severity</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Category</th>
+                <th style="padding:8px 12px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Details</th>
+              </tr></thead>
+              <tbody>${issuesHtml}</tbody>
+            </table>` : `<p style="color:#475569;font-size:13px;margin:0 0 20px;">${issues[0].message}</p>`}
+            <h3 style="font-size:13px;font-weight:800;color:#0f172a;margin:0 0 8px;">Recommended Next Steps</h3>
+            <ul style="padding-left:20px;margin:0 0 20px;">${recommendationsHtml}</ul>
+          </div>
+          <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;font-size:10px;color:#94a3b8;text-align:center;">
+            GA Web Telemetry SRE Dashboard · Routed to ${teamNames[teamKey]} · <a href="${url}" style="color:#6366f1;">View Site</a>
+          </div>
         </div>
-        <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;font-size:10px;color:#94a3b8;text-align:center;">
-          GA Web Telemetry SRE Dashboard · Automated Alert System · <a href="${url}" style="color:#6366f1;">View Site</a>
-        </div>
-      </div>
-    </body></html>`;
-    
-    await enqueueEmailAlert({
-      url,
-      recipient,
-      cc,
-      category,
-      level: topLevel,
-      subject,
-      message: allIssues.map(i => i.message).join(' | '),
-      html
-    });
+      </body></html>`;
+
+      await enqueueEmailAlert({
+        url,
+        recipient,
+        cc,
+        category: `${category}:${teamKey}`,
+        level: teamTopLevel,
+        subject,
+        message: issues.map(i => `[${teamNames[teamKey]}] ${i.message}`).join(' | '),
+        html
+      });
+    }
 
     // Update timestamp trackers in WebsiteEmailConfig
+    const overallTopLevel = allIssues.some(i => i.level === 'critical') ? 'critical' : allIssues.some(i => i.level === 'warning') ? 'warning' : 'info';
     const updatePayload = {
       lastEmailSent: new Date(),
-      lastAlertType: topLevel,
+      lastAlertType: overallTopLevel,
       $inc: { totalEmailsSent: 1 }
     };
-    if (topLevel !== 'critical') {
+    if (overallTopLevel !== 'critical') {
       updatePayload.lastWarningEmailSent = new Date();
     }
     await WebsiteEmailConfig.findOneAndUpdate({ url }, updatePayload);
   } catch (err) {
     console.error('❌ sendAlertEmailToWebsite error:', err.message);
   }
+};
+
+/**
+ * Backward compatibility alias for services expecting sendAlertEmail
+ */
+const sendAlertEmail = async (url, category, level, message, extraIssues = []) => {
+  return await sendAlertEmailToWebsite(url, category, level, message, extraIssues);
 };
 
 /**
@@ -1183,6 +1288,8 @@ Generated by GA Web Telemetry.`;
 
 module.exports = {
   sendAlertEmailToWebsite,
+  sendAlertEmail,
+  getTeamForIssue,
   sendPeriodicReportEmail,
   enqueueEmailAlert,
   initializeEmailQueue,
