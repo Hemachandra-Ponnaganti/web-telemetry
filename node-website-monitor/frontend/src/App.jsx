@@ -602,6 +602,7 @@ export default function App() {
 
   useEffect(() => {
     fetchTargets();
+    fetchStats(url);
     setInitializing(false);
 
     // Establish Socket.io connection to backend SRE Gateway
